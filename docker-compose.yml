@@ -1,0 +1,17 @@
+version: '3.0'
+services:
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+    links:
+      - redis-commander
+  redis-commander:
+    image: rediscommander/redis-commander
+    volumes:
+      - ./container/redis-commander/web/static/css/default.css:/redis-commander/web/static/css/default.css:ro
+    restart: always
+    environment:
+      - REDIS_HOSTS=redis
+    ports:
+      - 8081:8081

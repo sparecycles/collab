@@ -1,0 +1,54 @@
+{
+  "env": {
+    "shared-node-browser": true
+  },
+  "ignorePatterns": [ "**/*.d.ts", "node_modules/**" ],
+  "extends": [
+    "next/core-web-vitals",
+    "react",
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": [ "./src/jsconfig.json" ]
+  },
+  "rules": {
+    "semi": [ "error", "never" ],
+    "space-before-function-paren": [
+      "error",
+      {
+        "anonymous": "never",
+        "named": "never",
+        "asyncArrow": "always"
+      }
+    ],
+    "indent": ["error", 4, {
+      "flatTernaryExpressions": true
+    }],
+    "comma-dangle": [ "error", {
+      "arrays": "always-multiline",
+      "objects": "always-multiline",
+      "imports": "always-multiline",
+      "exports": "always-multiline",
+      "functions": "never"
+    } ],
+    "react/react-in-jsx-scope": [ "off" ],
+    "no-nested-ternary": [ "off" ],
+    "no-loop-func": [ "off" ],
+    "operator-linebreak": [ "off" ],
+    "quotes": ["error", "single", { "avoidEscape": true, "allowTemplateLiterals": true } ],
+    "jsx-quotes": ["error", "prefer-single"],
+    "@typescript-eslint/no-unused-vars": ["warn", {
+      "argsIgnorePattern": "^_",
+      "destructuredArrayIgnorePattern": "^_",
+      "caughtErrorsIgnorePattern": "^ignore"
+    } ]
+  },
+  "globals": {
+    "SubmitEvent": false,
+    "Set": false,
+    "Promise": false,
+    "Reflect": false
+  }
+}

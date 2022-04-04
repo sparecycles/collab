@@ -1,0 +1,8 @@
+{
+    "window.autoDetectColorScheme": true,
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+        "*.d.ts": "${basename}.js",
+        "package.json": "package-lock.json, yarn.lock"
+    }
+}
