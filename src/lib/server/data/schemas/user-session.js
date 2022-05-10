@@ -4,7 +4,7 @@ const userSessionSchema = ({
     spaces: space => ({
         info: () => scheme.hash(`spaces:${space}:info`),
         users: () => scheme.setSet(`spaces:${space}:users`),
-        sessions: session => ({
+        sessions: session => scheme.setSet(`spaces:${space}:sessions`, {
             info: () => scheme.hash(`spaces:${space}:sessions:${session}:info`),
             roles: () => scheme.set(`spaces:${space}:sessions:${session}:roles`),
         }),

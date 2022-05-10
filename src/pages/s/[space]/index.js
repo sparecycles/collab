@@ -6,14 +6,7 @@ import Cookies from 'cookies'
 import SpaceContext from 'components/space/SpaceContext'
 import { getSession } from 'lib/server/session'
 import PropTypes from 'lib/common/react-util/prop-types'
-import { loadCurrentUser, loadUserInfo } from 'lib/server/data/user-data'
-
-async function getUser({ space, session }) {
-    const user = await loadCurrentUser({ space, session })
-    const userinfo = await loadUserInfo({ space, user })
-
-    return userinfo
-}
+import userSessionSchema from 'lib/server/data/schemas/user-session'
 
 /** @type {import('next').GetServerSideProps} */
 export async function getServerSideProps({ req, res, params: { space }, ...other }) {
@@ -28,9 +21,14 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
 
     const { session } = getSession(cookies)
 
-    const user = await getUser({ space, session })
+    const [user, roles] = await Promise.all([
+        userSessionSchema.spaces(space).sessions(session).info().get('user'),
+        userSessionSchema.spaces(space).sessions(session).roles().getMembers(),
+    ])
 
-    if (!user.username) {
+    const userinfo = await userSessionSchema.spaces(space).users().item(user).getAll()
+
+    if (!userinfo.username) {
         return { redirect: { destination: `/s/${space}/register` } }
     }
 
@@ -44,7 +42,8 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
             type,
             space,
             user,
-            session,
+            roles: roles || [],
+            userinfo,
             config,
         },
     }

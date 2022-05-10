@@ -14,13 +14,14 @@ const scheme = {
         get: (field) => currentRedisClient().hGet(path, field),
         set: (...args) => currentRedisClient().hSet(path, ...args),
     }),
-    setSet: path => ({
+    setSet: (path, subpaths = {}) => ({
         ...commonOps(path),
         ...scheme.set(path),
+        ...subpaths,
         async getAllItems() {
             const ids = await scheme.set(path).getMembers()
             return (await Promise.all(ids.map(
-                async id => ({ id, data: await scheme.hash(`${path}:${id}`).getAll() })
+                async id => ({ [id]: await scheme.hash(`${path}:${id}`).getAll() })
             ))).reduce((map, data) => Object.assign(map, data), {})
         },
         del() {
@@ -75,11 +76,14 @@ const scheme = {
     hashList: path => ({
         ...scheme.list(path),
         getItem: id => scheme.hash(`${path}:${id}`),
-        addItem: async (id, value, mode = 'push') => {
+        updateItem: async (id, value, listmode = 'push') => {
+            return scheme.hash(`${path}:${id}`).set(value)
+        },
+        addItem: async (id, value, listmode = 'push') => {
             return await RedisContext.isolated(async () => {
                 await scheme.list(path).watch(path)
             }).multi(async () => {
-                await scheme.list(path)[mode](id)
+                await scheme.list(path)[listmode](id)
                 await scheme.hash(`${path}:${id}`).set(value)
             }).exec()
         },

@@ -15,17 +15,14 @@
   },
   "rules": {
     "semi": [ "error", "never" ],
-    "space-before-function-paren": [
-      "error",
-      {
-        "anonymous": "never",
-        "named": "never",
-        "asyncArrow": "always"
-      }
-    ],
-    "indent": ["error", 4, {
+    "space-before-function-paren": [ "error", {
+      "anonymous": "never",
+      "named": "never",
+      "asyncArrow": "always"
+    } ],
+    "indent": [ "error", 4, {
       "flatTernaryExpressions": true
-    }],
+    } ],
     "comma-dangle": [ "error", {
       "arrays": "always-multiline",
       "objects": "always-multiline",
@@ -37,9 +34,15 @@
     "no-nested-ternary": [ "off" ],
     "no-loop-func": [ "off" ],
     "operator-linebreak": [ "off" ],
-    "quotes": ["error", "single", { "avoidEscape": true, "allowTemplateLiterals": true } ],
-    "jsx-quotes": ["error", "prefer-single"],
+    "quotes": [ "error", "single", {
+      "avoidEscape": true,
+      "allowTemplateLiterals": true
+    } ],
+    "quote-props": [ "error", "as-needed" ],
+    "jsx-quotes": [ "error", "prefer-single" ],
+    "no-unused-vars": [ "off" ],
     "@typescript-eslint/no-unused-vars": ["warn", {
+      "args": "after-used",
       "argsIgnorePattern": "^_",
       "destructuredArrayIgnorePattern": "^_",
       "caughtErrorsIgnorePattern": "^ignore"

@@ -1,5 +1,4 @@
 import Cookies from 'cookies'
-import { loadCurrentUser, loadUserInfo } from 'lib/server/data/user-data'
 import methods from 'lib/server/api/methods'
 import { getSession } from 'lib/server/session'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
@@ -14,9 +13,9 @@ export default methods({
 
         const configRequest = userSessionSchema.spaces(space).info().getAll()
 
-        const user = await loadCurrentUser({ space, session })
+        const user = await userSessionSchema.spaces(space).sessions(session).info().get('user')
 
-        const userinfo = await loadUserInfo({ space, user })
+        const userinfo = await userSessionSchema.spaces(space).users().item(user).getAll()
 
         const { type } = await configRequest
 

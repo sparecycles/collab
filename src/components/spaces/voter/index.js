@@ -1,4 +1,4 @@
-import { Fragment, useContext, useRef, useState } from 'react'
+import { createContext, Fragment, useContext, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { useLongPress } from '@react-aria/interactions'
 import { mergeProps } from '@react-aria/utils'
@@ -10,6 +10,7 @@ import {
     Heading,
     RangeSlider,
     Slider,
+    Switch,
     Text,
     TextField,
     useProvider,
@@ -23,10 +24,9 @@ import { useDeleteListItem, useEditListItem } from 'lib/client/data/util/list-da
 import { useKeyMapping } from 'lib/client/data/util/key-mapping-context'
 import SpaceContext from 'components/space/SpaceContext'
 import GraphBullet from '@spectrum-icons/workflow/GraphBullet'
-import structures from 'components/space/entities'
+import apiStructures from 'lib/server/api/api-structures'
 import PropTypes from 'lib/common/react-util/prop-types'
 import scheme from 'lib/server/redis-util/scheme'
-import { loadCurrentUser } from 'lib/server/data/user-data'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
 
 /** @type {import('lib/common/spaces').SpaceChoice} */
@@ -52,21 +52,67 @@ const voterScheme = {
     }),
 }
 
-/** @type {import('lib/common/spaces').ApiMap} */
+function roleContext(...checks) {
+    return ({ context: { roles } }) => checks.every(role => typeof role === 'string'
+        ? roles.has(role)
+        : role(roles)
+    )
+}
+
+function requireRoleContext(...checks) {
+    return ({ context }, res) => {
+        const satisified = checks.map(check => typeof check === 'string'
+            ? context[check]
+            : check(context)
+        ).every(Boolean)
+
+        if (!satisified) {
+            res.status(404).end(`not authorized`)
+        }
+    }
+}
+
+/** @type {import('lib/common/spaces').ApiMap<{ context: { user: string, roles: Set<string> } }>} */
 export const api = {
-    stories: structures.list(({ space }) => `spaces:${space}:stories`, '[story]', {
+    $context: {
+        user({ query: { space, session } }) {
+            return userSessionSchema.spaces(space).sessions(session).info().get('user')
+        },
+        async roles({ query: { space, session } }) {
+            return new Set(await userSessionSchema.spaces(space).sessions(session).roles().getMembers('user'))
+        },
+        userinfo({ context: { user }, query: { space } }) {
+            return userSessionSchema.spaces(space).users().item(user).getAll()
+        },
+        allUsers({ query: { space } }) {
+            return userSessionSchema.spaces(space).users().getAllItems()
+        },
+        adminRole: roleContext('admin'),
+    },
+    users: {
+        $inherited: { $get: requireRoleContext('adminRole') },
+        $get({ context: { allUsers } }, res) {
+            return res.json(allUsers)
+        },
+        '[userId]': {
+            $delete({ query: { space, userId } }, res) {
+                userSessionSchema.spaces(space).users().item(userId).rem()
+                return res.status(204).end()
+            },
+        },
+    },
+    stories: apiStructures?.hashList?.(({ space }) => voterScheme.spaces(space).stories(), '[story]', {
+        /** @type {import('lib/common/spaces').ApiMap<{ context: { user: string, roles: Set<string> } }>} */
         '[story]': {
             vote: {
-                async put({ body, query: { space, session, story } }, res) {
-                    const user = await loadCurrentUser({ space, session })
+                async $put({ body, context: { user }, query: { space, story } }, res) {
                     const { vote } = body
                     voterScheme.spaces(space).users(user).votes().set({ [story]: vote })
                     res.status(204).end()
                 },
-                async get({ query: { space, session, story } }, res) {
+                async $get({ context: { user }, query: { space, story } }, res) {
                     const allUserIds = await userSessionSchema.spaces(space).users().getMembers()
 
-                    const user = await loadCurrentUser({ space, session })
                     const otherUsers = allUserIds.filter(id => id !== user)
 
                     let [vote, otherVotes] = await Promise.all([
@@ -87,11 +133,36 @@ export const api = {
 }
 
 /** @type {import('next').GetServerSideProps} */
-export async function getServerSideProps({ req, res, params: { space } }) {
+export async function getServerSideProps({ params: { space } }) {
     return { props: {
         pageTitle: 'Grooming',
         stories: await voterScheme.spaces(space).stories().allItems(),
     } }
+}
+
+function UserAdmin() {
+    const { space } = useContext(SpaceContext)
+
+    const {
+        data: allUsers,
+        mutate,
+    } = useSWR('all-users', async () => (await fetch(`/api/s/${space}/users`)).json())
+
+    return (
+        <Flex>
+            { Object.entries(allUsers || {}).sort()
+                .map(([id, { username }]) => (
+                    <Well key={id} position='relative'>
+                        {username}
+                        <ClearButton position={'absolute'} top={'-7px'} right={'-7px'} onPress={async () => {
+                            await fetch(`/api/s/${space}/users/${id}`, { method: 'delete' })
+                            mutate()
+                        }} />
+                    </Well>
+                ))
+            }
+        </Flex>
+    )
 }
 
 Voter.propTypes = {
@@ -101,29 +172,41 @@ Voter.propTypes = {
     })).isRequired,
 }
 
-export default function Voter({ space, stories: initialStories }) {
+const ShowVoteContext = createContext()
+
+export default function Voter({ space, roles, stories: initialStories, userinfo: { username } }) {
     let { data: stories } = useSWR('stories', async () => (await fetch(`/api/s/${space}/stories`)).json(), {
         fallbackData: initialStories,
         refreshInterval: 1000,
     })
 
+    let hasRole = Set.prototype.has.bind(useRef(new Set(roles)).current)
+
     const keyMapping = useKeyMapping()
+
+    const [showVotes, setShowVotes] = useState(true)
 
     return (
         <Fragment>
-            <Flex
-                direction={'column'}
-                alignSelf={'center'}
-                minWidth={'80vw'}
-                margin={'size-200'}
-                gap={'size-300'}
-            >
-                <Heading level={1}><Text>Groom Stories</Text></Heading>
-                { stories?.map(({ id, ...props }) => (
-                    <StoryItem key={keyMapping(id)} story={id} {...props} />
-                )) }
-                <StoryEditItem/>
-            </Flex>
+            <ShowVoteContext.Provider value={showVotes}>
+                <Flex
+                    direction={'column'}
+                    alignSelf={'center'}
+                    minWidth={'80vw'}
+                    margin={'size-200'}
+                    gap={'size-300'}
+                    position={'relative'}
+                >
+                    <Switch label='show vote' position={'absolute'} top='size-130' right='size-130'
+                        defaultSelected onChange={setShowVotes} value={showVotes}/>
+                    <Heading level={1}><Text>Groom Stories {username}</Text></Heading>
+                    { hasRole('admin') ? <UserAdmin/> : null }
+                    { stories?.map(({ id, ...props }) => (
+                        <StoryItem key={keyMapping(id)} story={id} {...props} />
+                    )) }
+                    <StoryEditItem/>
+                </Flex>
+            </ShowVoteContext.Provider>
         </Fragment>
     )
 }
@@ -189,6 +272,8 @@ function StoryDisplayItem({ story, title, setEditMode }) {
         return `${Math.min(Math.max(0, ratio), 1) * 100}%`
     }
 
+    const showVotes = useContext(ShowVoteContext)
+
     return (
         <div {...longPressProps}>
             <Well position={'relative'}>
@@ -200,9 +285,14 @@ function StoryDisplayItem({ story, title, setEditMode }) {
                     label={<Flex width={'size-500'} justifyContent={'end'}>Size</Flex>}
                     labelPosition={'side'}
                 />
-                <Slider position={'absolute'} left={'10%'} bottom={'0'} minValue={storyMin} maxValue={storyMax}
+                <Slider isHidden={!showVotes}
+                    position={'absolute'}
+                    left={'10%'}
+                    bottom={'0'}
                     width={'80vw'}
                     value={vote}
+                    minValue={storyMin}
+                    maxValue={storyMax}
                     onChange={vote => {
                         mutate({ vote, otherVotes }, false)
                     }}

@@ -1,8 +1,9 @@
 {
     "compilerOptions": {
         "baseUrl": "./src",
+        "noUnusedParameters": false
     },
     "include": [
         "src/**/*"
-    ],
+    ]
 }
