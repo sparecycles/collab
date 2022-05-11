@@ -45,7 +45,7 @@ export const roles = {
 const voterScheme = {
     spaces: space => ({
         path: () => `spaces:${space}`,
-        stories: () => scheme.hashList(`spaces:${space}:stories`),
+        stories: scheme.hashList(`spaces:${space}:stories`),
         users: user => ({
             votes: () => scheme.hash(`spaces:${space}:users:${user}:votes`),
         }),
@@ -76,13 +76,13 @@ function requireRoleContext(...checks) {
 export const api = {
     $context: {
         user({ query: { space, session } }) {
-            return userSessionSchema.spaces(space).sessions(session).info().get('user')
+            return userSessionSchema.spaces(space).sessions(session).get('user')
         },
         async roles({ query: { space, session } }) {
             return new Set(await userSessionSchema.spaces(space).sessions(session).roles().getMembers('user'))
         },
         userinfo({ context: { user }, query: { space } }) {
-            return userSessionSchema.spaces(space).users().item(user).getAll()
+            return userSessionSchema.spaces(space).users(user).getAll()
         },
         allUsers({ query: { space } }) {
             return userSessionSchema.spaces(space).users().getAllItems()
@@ -96,7 +96,7 @@ export const api = {
         },
         '[userId]': {
             $delete({ query: { space, userId } }, res) {
-                userSessionSchema.spaces(space).users().item(userId).rem()
+                userSessionSchema.spaces(space).users(userId).del()
                 return res.status(204).end()
             },
         },
@@ -122,7 +122,7 @@ export const api = {
                         )),
                     ])
 
-                    vote = Number(vote) || 3
+                    vote = Number(vote || 3)
                     otherVotes = otherVotes.map(Number)
 
                     res.status(200).json({ vote, otherVotes })

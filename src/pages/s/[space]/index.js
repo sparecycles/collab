@@ -22,11 +22,11 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
     const { session } = getSession(cookies)
 
     const [user, roles] = await Promise.all([
-        userSessionSchema.spaces(space).sessions(session).info().get('user'),
+        userSessionSchema.spaces(space).sessions(session).get('user'),
         userSessionSchema.spaces(space).sessions(session).roles().getMembers(),
     ])
 
-    const userinfo = await userSessionSchema.spaces(space).users().item(user).getAll()
+    const userinfo = await userSessionSchema.spaces(space).users(user).getAll()
 
     if (!userinfo.username) {
         return { redirect: { destination: `/s/${space}/register` } }

@@ -12,10 +12,10 @@ export default methods({
         const rolesRequest = userSessionSchema.spaces(space).sessions(session).roles().getMembers()
 
         const configRequest = userSessionSchema.spaces(space).info().getAll()
+        /** @type {string} */
+        const user = await userSessionSchema.spaces(space).sessions(session).get('user')
 
-        const user = await userSessionSchema.spaces(space).sessions(session).info().get('user')
-
-        const userinfo = await userSessionSchema.spaces(space).users().item(user).getAll()
+        const userinfo = await userSessionSchema.spaces(space).users(user).getAll()
 
         const { type } = await configRequest
 

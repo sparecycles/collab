@@ -38,10 +38,10 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         if (username) {
             cookies.set('username', username, { maxAge: 60 * 60 * 24 * 7 })
 
-            let user = await userSessionSchema.spaces(space).sessions(session).info().get('user')
+            let user = await userSessionSchema.spaces(space).sessions(session).get('user')
 
             if (user) {
-                await userSessionSchema.spaces(space).users().item(user).set({ username })
+                await userSessionSchema.spaces(space).users(user).set({ username })
             } else {
                 user = crypto.randomUUID()
 
@@ -49,8 +49,8 @@ export async function getServerSideProps({ req, res, params: { space } }) {
                 const initialRoles = session === creatorSession && roles.creator || roles.user || []
 
                 await Promise.all([
-                    userSessionSchema.spaces(space).users().item(user).set({ username }),
-                    userSessionSchema.spaces(space).sessions(session).info().set({ user }),
+                    userSessionSchema.spaces(space).users(user).set({ username }),
+                    userSessionSchema.spaces(space).sessions(session).set({ user }),
                     userSessionSchema.spaces(space).sessions(session).roles().add(initialRoles),
                 ])
             }
