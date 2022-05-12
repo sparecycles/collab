@@ -16,7 +16,11 @@ const httpOnly = true
 export async function getServerSideProps({ req, res, params: { space } }) {
     const cookies = new Cookies(req, res)
 
-    const { type, 'creator-session': creatorSession, ...config } = await redisClient.hGetAll(`spaces:${space}:info`)
+    const {
+        type,
+        'creator-session': creatorSession,
+        ...config
+    } = await userSessionSchema.spaces(space).$getAll()
 
     if (!type) {
         cookies.set('last-error', `space ${space} does not exist`, { httpOnly })
@@ -38,10 +42,10 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         if (username) {
             cookies.set('username', username, { maxAge: 60 * 60 * 24 * 7 })
 
-            let user = await userSessionSchema.spaces(space).sessions(session).get('user')
+            let user = await userSessionSchema.spaces(space).sessions(session).$get('user')
 
             if (user) {
-                await userSessionSchema.spaces(space).users(user).set({ username })
+                await userSessionSchema.spaces(space).users(user).$set({ username })
             } else {
                 user = crypto.randomUUID()
 
@@ -49,9 +53,9 @@ export async function getServerSideProps({ req, res, params: { space } }) {
                 const initialRoles = session === creatorSession && roles.creator || roles.user || []
 
                 await Promise.all([
-                    userSessionSchema.spaces(space).users(user).set({ username }),
-                    userSessionSchema.spaces(space).sessions(session).set({ user }),
-                    userSessionSchema.spaces(space).sessions(session).roles().add(initialRoles),
+                    userSessionSchema.spaces(space).users(user).$set({ username }),
+                    userSessionSchema.spaces(space).sessions(session).$set({ user }),
+                    userSessionSchema.spaces(space).sessions(session).roles().$add(initialRoles),
                 ])
             }
 

@@ -69,7 +69,7 @@ function associateContextData(req, source) {
     )
 }
 
-function withContext(handler, prefetch) {
+function withContext(handler) {
     const needsContextByMethod = {}
 
     return async (req, res, ...next) => {
@@ -81,15 +81,13 @@ function withContext(handler, prefetch) {
 
         for (;;) {
             try {
-                await Promise.all([...needsContextSet.values()].map(name => {
-                    prefetch[name] = true
-                    return provideContextData(req, res, name)
-                }))
+                await Promise.all([...needsContextSet.values()].map(
+                    name => provideContextData(req, res, name))
+                )
                 return await handler({ ...req, context: contextData.context }, res, ...next)
             } catch (waitForError) {
                 if (waitForError instanceof WaitForError) {
                     const { name } = waitForError
-                    console.warn(`${req.method} ${req.url}: adding handler context assertion: ${name}`)
                     needsContextSet.add(name)
                 } else throw waitForError
             }
@@ -98,14 +96,12 @@ function withContext(handler, prefetch) {
 }
 
 export default function composeMiddleware({ context: providers }, ...handlers) {
-    const prefetch = {}
-
     providers = Object.entries(providers).reduce(
-        (providers, [name, provider]) => Object.assign(providers, { [name]: withContext(provider, prefetch) }),
+        (providers, [name, provider]) => Object.assign(providers, { [name]: withContext(provider) }),
         {}
     )
 
-    handlers = handlers.map(handler => withContext(methods(handler), prefetch))
+    handlers = handlers.map(handler => withContext(methods(handler)))
 
     return doComposeMiddleware(...handlers)
 

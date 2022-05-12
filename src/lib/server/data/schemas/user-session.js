@@ -1,20 +1,19 @@
-import scheme from 'lib/server/redis-util/scheme'
+import scheme from 'lib/server/redis-util/redis-scheme'
 
-const userSessionSchema = ({
-    spaces: space => ({
-        info: () => scheme.hash(`spaces:${space}:info`),
-        users: scheme.hashSet(`spaces:${space}:users`),
-        sessions: scheme.hashSet(`spaces:${space}:sessions`, {}, session => ({
-            info: () => scheme.hash(`spaces:${space}:sessions:${session}:info`),
-            roles: () => scheme.set(`spaces:${space}:sessions:${session}:roles`),
-            del: () => {
+const userSessionSchema = {
+    spaces: scheme.hashSet(`collab:spaces`, {}, space => ({
+        users: scheme.hashSet(`collab:spaces:${space}:users`),
+        sessions: scheme.hashSet(`collab:spaces:${space}:sessions`, {}, session => ({
+            info: () => scheme.hash(`collab:spaces:${space}:sessions:${session}:info`),
+            roles: () => scheme.set(`collab:spaces:${space}:sessions:${session}:roles`),
+            $del() {
                 return Promise.all([
-                    scheme.hashSet(`spaces:${space}:sessions`).del(),
-                    scheme.common(`spaces:${space}:sessions:${session}:roles`).del(),
+                    scheme.hashSet(`collab:spaces:${space}:sessions`)().$del(),
+                    scheme.common(`collab:spaces:${space}:sessions:${session}:roles`).$del(),
                 ])
             },
         })),
-    }),
-})
+    })),
+}
 
 export default userSessionSchema

@@ -1,5 +1,5 @@
-declare import scheme from 'lib/server/redis-util/scheme'
-import { NavigateTemplateFn } from '../navigate'
+declare import scheme from 'lib/server/redis-util/redis-scheme'
+import { NavigateTemplateFn } from '../../server/api/navigate'
 
 type HashList = ReturnType<typeof scheme.hashList>
 

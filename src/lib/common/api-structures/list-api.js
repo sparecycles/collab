@@ -10,28 +10,29 @@ export default function hashList(hashListFor, param, { [param]: paramMixin, ...m
 
     return {
         async $get({ query }, res) {
-            const list = await hashListFor(query).allItems()
+            const list = await hashListFor(query)().$allItems()
 
             return res.json(list)
         },
         async $post({ body, query }, res) {
+            /** @type {{[_:string]: string}} */
             const { id = crypto.randomUUID(), title } = body
 
-            await hashListFor(query).addItem(id, { title })
+            await hashListFor(query)(id).$add({ title })
 
             return res.json({ id })
         },
         ...mixin,
         [param]: {
             async $delete({ query: { [paramName]: param, ...query } }, res) {
-                await hashListFor(query).remItem(param)
+                await hashListFor(query)(param).$del()
                 return res.status(204).end(param)
             },
             async $get({ query: { [paramName]: param, ...query } }, res) {
-                return res.json(await hashListFor(query).getItem(param))
+                return res.json(await hashListFor(query)(param).$get())
             },
             async $put({ body, query: { [paramName]: param, ...query } }, res) {
-                return res.json(await hashListFor(query).updateItem(param, body))
+                return res.json(await hashListFor(query)(param).$set(body))
             },
             ...paramMixin,
         },

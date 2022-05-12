@@ -3,12 +3,19 @@ const glob = require('glob')
 const path = require('path')
 const nextComposePlugins = require('next-compose-plugins')
 const nextTranspileModules = require('next-transpile-modules')
+const { version } = require('os')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   webpack: (config, { webpack, isServer }) => {
-    config.resolve.alias['@react-aria/ssr'] = path.resolve('./src/patch/react-aria-ssr')
+    
+    const { version: reactVersion } = require('react/package.json')
+    const reactMajorVersion = Number(reactVersion.split('.')[0])
+
+    if (reactMajorVersion >= 18) {
+      config.resolve.alias['@react-aria/ssr'] = path.resolve('./src/patch/react-aria-ssr-use-id')
+    }
     
     if (!isServer) {
       config.resolve.alias['lib/server'] = false

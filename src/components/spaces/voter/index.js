@@ -24,9 +24,9 @@ import { useDeleteListItem, useEditListItem } from 'lib/client/data/util/list-da
 import { useKeyMapping } from 'lib/client/data/util/key-mapping-context'
 import SpaceContext from 'components/space/SpaceContext'
 import GraphBullet from '@spectrum-icons/workflow/GraphBullet'
-import apiStructures from 'lib/server/api/api-structures'
+import apiStructures from 'lib/common/api-structures'
 import PropTypes from 'lib/common/react-util/prop-types'
-import scheme from 'lib/server/redis-util/scheme'
+import scheme from 'lib/server/redis-util/redis-scheme'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
 
 /** @type {import('lib/common/spaces').SpaceChoice} */
@@ -44,10 +44,10 @@ export const roles = {
 
 const voterScheme = {
     spaces: space => ({
-        path: () => `spaces:${space}`,
-        stories: scheme.hashList(`spaces:${space}:stories`),
+        path: () => `collab:spaces:${space}`,
+        stories: scheme.hashList(`collab:spaces:${space}:stories`),
         users: user => ({
-            votes: () => scheme.hash(`spaces:${space}:users:${user}:votes`),
+            votes: () => scheme.hash(`collab:spaces:${space}:users:${user}:votes`),
         }),
     }),
 }
@@ -60,11 +60,16 @@ function roleContext(...checks) {
 }
 
 function requireRoleContext(...checks) {
-    return ({ context }, res) => {
-        const satisified = checks.map(check => typeof check === 'string'
+    const stringChecks = checks.filter(check => typeof check === 'string')
+    const otherChecks = checks.filter(check => typeof check !== 'string')
+
+    checks = [...stringChecks, ...otherChecks]
+
+    return async ({ context }, res) => {
+        const satisified = (await Promise.all(checks.map(check => typeof check === 'string'
             ? context[check]
             : check(context)
-        ).every(Boolean)
+        ))).every(Boolean)
 
         if (!satisified) {
             res.status(404).end(`not authorized`)
@@ -76,16 +81,16 @@ function requireRoleContext(...checks) {
 export const api = {
     $context: {
         user({ query: { space, session } }) {
-            return userSessionSchema.spaces(space).sessions(session).get('user')
+            return userSessionSchema.spaces(space).sessions(session).$get('user')
         },
         async roles({ query: { space, session } }) {
-            return new Set(await userSessionSchema.spaces(space).sessions(session).roles().getMembers('user'))
+            return new Set(await userSessionSchema.spaces(space).sessions(session).roles().$members())
         },
         userinfo({ context: { user }, query: { space } }) {
-            return userSessionSchema.spaces(space).users(user).getAll()
+            return userSessionSchema.spaces(space).users(user).$getAll()
         },
         allUsers({ query: { space } }) {
-            return userSessionSchema.spaces(space).users().getAllItems()
+            return userSessionSchema.spaces(space).users().$allItems()
         },
         adminRole: roleContext('admin'),
     },
@@ -96,29 +101,29 @@ export const api = {
         },
         '[userId]': {
             $delete({ query: { space, userId } }, res) {
-                userSessionSchema.spaces(space).users(userId).del()
+                userSessionSchema.spaces(space).users(userId).$del()
                 return res.status(204).end()
             },
         },
     },
-    stories: apiStructures?.hashList?.(({ space }) => voterScheme.spaces(space).stories(), '[story]', {
+    stories: apiStructures.hashList(({ space }) => voterScheme.spaces(space).stories, '[story]', {
         /** @type {import('lib/common/spaces').ApiMap<{ context: { user: string, roles: Set<string> } }>} */
         '[story]': {
             vote: {
                 async $put({ body, context: { user }, query: { space, story } }, res) {
                     const { vote } = body
-                    voterScheme.spaces(space).users(user).votes().set({ [story]: vote })
+                    voterScheme.spaces(space).users(user).votes().$set({ [story]: vote })
                     res.status(204).end()
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
-                    const allUserIds = await userSessionSchema.spaces(space).users().getMembers()
+                    const allUserIds = await userSessionSchema.spaces(space).users().$members()
 
                     const otherUsers = allUserIds.filter(id => id !== user)
 
                     let [vote, otherVotes] = await Promise.all([
-                        voterScheme.spaces(space).users(user).votes().get(story),
+                        voterScheme.spaces(space).users(user).votes().$get(story),
                         Promise.all(otherUsers.map(async other =>
-                            (await voterScheme.spaces(space).users(other).votes().get(story)) || 3
+                            (await voterScheme.spaces(space).users(other).votes().$get(story)) || 3
                         )),
                     ])
 
@@ -136,8 +141,19 @@ export const api = {
 export async function getServerSideProps({ params: { space } }) {
     return { props: {
         pageTitle: 'Grooming',
-        stories: await voterScheme.spaces(space).stories().allItems(),
+        stories: await voterScheme.spaces(space).stories().$allItems(),
     } }
+}
+
+function useDeleteUser(onComplete = Function.prototype) {
+    const { space } = useContext(SpaceContext)
+    return user => async () => {
+        try {
+            await fetch(`/api/s/${space}/users/${user}`, { method: 'delete' })
+        } finally {
+            onComplete()
+        }
+    }
 }
 
 function UserAdmin() {
@@ -148,16 +164,15 @@ function UserAdmin() {
         mutate,
     } = useSWR('all-users', async () => (await fetch(`/api/s/${space}/users`)).json())
 
+    const deleteUser = useDeleteUser(mutate)
+
     return (
-        <Flex>
+        <Flex direction={'column'}>
             { Object.entries(allUsers || {}).sort()
-                .map(([id, { username }]) => (
-                    <Well key={id} position='relative'>
+                .map(([user, { username }]) => (
+                    <Well key={user} position='relative'>
                         {username}
-                        <ClearButton position={'absolute'} top={'-7px'} right={'-7px'} onPress={async () => {
-                            await fetch(`/api/s/${space}/users/${id}`, { method: 'delete' })
-                            mutate()
-                        }} />
+                        <ClearButton position={'absolute'} top={'-7px'} right={'-7px'} onPress={deleteUser(user)} />
                     </Well>
                 ))
             }
@@ -252,7 +267,7 @@ function StoryDisplayItem({ story, title, setEditMode }) {
 
     const {
         low, high,
-    } = range(...otherVotes, vote, vote)
+    } = range(...otherVotes, vote)
 
     const consensus = {
         start: low,

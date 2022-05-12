@@ -1,18 +1,57 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import redisClient from '../redis-client'
 
-/** @type {AsyncLocalStorage<typeof redisClient>} */
-const defaultRedisClientStore = new AsyncLocalStorage()
+/** @type {AsyncLocalStorage<{ current: typeof redisClient, isolated: typeof redisClient, multi: ReturnType<typeof redisClient.multi> >} */
+const redisContextStore = new AsyncLocalStorage()
 
-export function withRedisClient(redis, callback, ...args) {
-    if (redis === currentRedisClient()) {
-        return callback(...args)
+function addAwaitsToActiveContext(promise) {
+    const context = redisContextStore.getStore()
+
+    if (context) {
+        context.awaits.push(promise)
     }
-    return defaultRedisClientStore.run(redis, callback, ...args)
+}
+
+export async function withRedisClient(type, callback, ...args) {
+    const context = redisContextStore.getStore()
+    const { current = redisClient } = context || {}
+
+    if (!context) {
+        if (type !== 'isolated') {
+            throw new Error('cannot start a redis context: ' + type)
+        }
+
+        return current.executeIsolated(
+            async isolated => redisContextStore.run({ current: isolated, isolated, awaits: [] }, callback, ...args)
+        )
+    }
+
+    if (type === 'isolated') {
+        return redisContextStore.run({ ...context, current: context.isolated }, callback, ...args)
+    }
+
+    if (type === 'multi') {
+        let { multi } = context
+        if (!multi) {
+            multi = context.multi = context.isolated.multi()
+            try {
+                return await redisContextStore.run({ ...context, current: multi }, callback, ...args)
+            } finally {
+                await Promise.all(context.awaits)
+                context.execResult = multi.exec()
+            }
+        } else {
+            return await redisContextStore.run({ ...context, current: multi }, callback, ...args)
+        }
+    }
+
+    if (type === 'exec') {
+        return context.execResult
+    }
 }
 
 export function currentRedisClient() {
-    const redis = defaultRedisClientStore.getStore() || redisClient
+    const { current: redis = redisClient } = redisContextStore.getStore() || {}
     return redis
 }
 
@@ -28,31 +67,32 @@ const deferred = () => {
 
 const RedisContext = {
     isolated(isolatedCallback, ...args) {
-        const multiRegisteredPromise = deferred()
-        const resultPromise = deferred()
+        const multiCallbackPromise = deferred()
+        const execReadyPromise = deferred()
 
-        let multiCallback
+        addAwaitsToActiveContext(execReadyPromise)
 
-        multiRegisteredPromise.then(() => currentRedisClient().executeIsolated(async isolatedClient => {
-            await multiRegisteredPromise
+        multiCallbackPromise.then(multiCallback => withRedisClient('isolated', async () => {
+            try {
+                const isolatedResult = await isolatedCallback(...args)
 
-            await withRedisClient(isolatedClient, async () => {
-                const isolated = await (isolatedCallback || Function.prototype)(...args)
+                const multiResult = await withRedisClient('multi', multiCallback, isolatedResult)
 
-                const multiClient = isolatedClient.multi()
-                const multi = await withRedisClient(multiClient, multiCallback || Function.prototype, isolated)
-
-                const exec = await multiClient.exec()
-
-                resultPromise.resolve({ multi, exec })
-            })
+                execReadyPromise.resolve({ result: multiResult, execResult: await withRedisClient('exec') })
+            } catch (error) {
+                execReadyPromise.reject(error)
+            }
         }))
 
         return {
             multi(callback) {
-                multiCallback = callback
-                multiRegisteredPromise.resolve(true)
-                return { exec: () => resultPromise }
+                multiCallbackPromise.resolve(callback)
+                return {
+                    async exec() {
+                        const { result: multiResult, execResult } = await execReadyPromise
+                        return { exec: execResult, multi: multiResult }
+                    },
+                }
             },
         }
     },

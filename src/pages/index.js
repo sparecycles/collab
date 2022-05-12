@@ -23,6 +23,9 @@ import Cookies from 'cookies'
 import spaces from 'lib/common/spaces'
 import { getSession } from 'lib/server/session'
 import PropTypes from 'lib/common/react-util/prop-types'
+import RedisContext from 'lib/server/redis-util/redis-context'
+import userSessionSchema from 'lib/server/data/schemas/user-session'
+import scheme from 'lib/server/redis-util/redis-scheme'
 
 function spaceNameInvalid(space) {
     return /[^a-z0-9_-]/i.test(space)
@@ -51,27 +54,24 @@ export async function getServerSideProps({ req, res }) {
         space = space || crypto.randomUUID()
 
         try {
-            const spaceConfig = `spaces:${space}:info`
-            await redisClient.executeIsolated(async isolated => {
-                if (space.startsWith('error:')) {
-                    throw new Error(space.replace(/^error:/, ''))
-                }
+            const result = await RedisContext.isolated(async () => {
+                userSessionSchema.spaces(space).$watch()
 
-                await isolated.watch(spaceConfig)
-
-                const existingConfig = await isolated.hGetAll(spaceConfig)
-                if (existingConfig.type) {
+                const type = await userSessionSchema.spaces(space).$get('type')
+                if (type) {
                     throw new WatchError(`space ${space} already exists`)
                 }
 
-                if (space.startsWith('conflict:')) {
-                    await redisClient.hSet(spaceConfig, 'type', type)
+                if (space.startsWith('error--')) {
+                    throw new Error(space.replace(/^error--/, ''))
                 }
 
-                return await isolated.multi()
-                    .hSet(spaceConfig, { type, 'creator-session': session })
-                    .exec()
-            })
+                if (space.startsWith('conflict--')) {
+                    await scheme.hash(userSessionSchema.spaces(space).$path()).$set({ type: 'conflict' })
+                }
+            }).multi(async () => {
+                userSessionSchema.spaces(space).$set({ type, 'creator-session': session })
+            }).exec()
 
             return { redirect: { statusCode: 303, destination: `/s/${space}/register` } }
         } catch (ex) {

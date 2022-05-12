@@ -4,18 +4,18 @@ import { getSession } from 'lib/server/session'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
 
 export default methods({
-    async get(req, res) {
+    async $get(req, res) {
         const { session } = getSession(new Cookies(req, res), false)
 
         const { query: { space } } = req
 
-        const rolesRequest = userSessionSchema.spaces(space).sessions(session).roles().getMembers()
+        const rolesRequest = userSessionSchema.spaces(space).sessions(session).roles().$members()
 
-        const configRequest = userSessionSchema.spaces(space).info().getAll()
-        /** @type {string} */
-        const user = await userSessionSchema.spaces(space).sessions(session).get('user')
+        const configRequest = userSessionSchema.spaces(space).$getAll()
 
-        const userinfo = await userSessionSchema.spaces(space).users(user).getAll()
+        const user = await userSessionSchema.spaces(space).sessions(session).$get('user')
+
+        const userinfo = user && await userSessionSchema.spaces(space).users(user).$getAll()
 
         const { type } = await configRequest
 
@@ -24,7 +24,7 @@ export default methods({
                 config: { type },
                 roles: await rolesRequest,
                 user,
-                users: { [user]: userinfo },
+                ...user ? { userinfo: { [user]: userinfo } } : { },
             })
         }
 

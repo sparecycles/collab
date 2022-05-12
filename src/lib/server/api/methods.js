@@ -3,28 +3,28 @@ function handlerNames(method) {
 }
 
 /** @type { (Handlers: import('next').NextApiHandler | { [_:string]: import('next').NextApiHandler }): import('next').NextApiHandler} */
-export default function methods(Handlers) {
-    if (typeof Handlers === 'function') {
-        return Handlers
+export default function methods(handlers) {
+    if (typeof handlers === 'function') {
+        return handlers
     }
 
-    if (!Handlers) {
+    if (!handlers) {
         return null
     }
 
-    return async (req, res) => {
+    return (req, res, ...args) => {
         const method = req.method.toLowerCase()
 
-        const handler = fun(...handlerNames(method).map(m => Handlers[m]))
+        const handler = fun(...handlerNames(method).map(m => handlers[m]))
 
-        return handler && handler(req, res)
+        return handler && handler(req, res, ...args)
     }
 }
 
 function fun(...handlers) {
     for (const handler of handlers) {
         if (typeof handler === 'function') {
-            return handler.bind(handlers)
+            return handler//handler.bind(handlers)
         }
     }
 }

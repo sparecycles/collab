@@ -7,12 +7,13 @@ import SpaceContext from 'components/space/SpaceContext'
 import { getSession } from 'lib/server/session'
 import PropTypes from 'lib/common/react-util/prop-types'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
+import UserControls from 'components/space/UserControls'
 
 /** @type {import('next').GetServerSideProps} */
 export async function getServerSideProps({ req, res, params: { space }, ...other }) {
     const cookies = new Cookies(req, res)
 
-    const { type, ...config } = await redisClient.hGetAll(`spaces:${space}:info`)
+    const { type, ...config } = await userSessionSchema.spaces(space).$getAll()
 
     if (!type) {
         cookies.set('last-error', `space ${space} does not exist`)
@@ -22,11 +23,11 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
     const { session } = getSession(cookies)
 
     const [user, roles] = await Promise.all([
-        userSessionSchema.spaces(space).sessions(session).get('user'),
-        userSessionSchema.spaces(space).sessions(session).roles().getMembers(),
+        userSessionSchema.spaces(space).sessions(session).$get('user'),
+        userSessionSchema.spaces(space).sessions(session).roles().$members(),
     ])
 
-    const userinfo = await userSessionSchema.spaces(space).users(user).getAll()
+    const userinfo = user ? await userSessionSchema.spaces(space).users(user).$getAll() : {}
 
     if (!userinfo.username) {
         return { redirect: { destination: `/s/${space}/register` } }
@@ -54,7 +55,7 @@ Space.propTypes = {
     type: PropTypes.string.isRequired,
 }
 
-export default function Space({ pageTitle, type, ...props }) {
+export default function Space({ pageTitle, type, user, ...props }) {
     const { Component } = spaces[type]
 
     return (
@@ -65,7 +66,8 @@ export default function Space({ pageTitle, type, ...props }) {
                 <link rel={'icon'} href={'/favicon.ico'} />
             </Head>
 
-            <SpaceContext.Provider value={{ type, ...props }}>
+            <SpaceContext.Provider value={{ type, user, ...props }}>
+                <UserControls position='fixed' bottom='size-100' right='size-100' user={user} />
                 <Component {...props} />
             </SpaceContext.Provider>
         </Fragment>
