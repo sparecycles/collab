@@ -15,14 +15,10 @@
   },
   "rules": {
     "semi": [ "error", "never" ],
-    "space-before-function-paren": [ "error", {
-      "anonymous": "never",
-      "named": "never",
-      "asyncArrow": "always"
-    } ],
     "indent": [ "error", 4, {
       "flatTernaryExpressions": true
     } ],
+    "arrow-parens": [ "error", "as-needed", { "requireForBlockBody": true } ],
     "comma-dangle": [ "error", {
       "arrays": "always-multiline",
       "objects": "always-multiline",
@@ -30,7 +26,11 @@
       "exports": "always-multiline",
       "functions": "never"
     } ],
-    "react/react-in-jsx-scope": [ "off" ],
+    "space-before-function-paren": [ "error", {
+      "anonymous": "never",
+      "named": "never",
+      "asyncArrow": "always"
+    } ],
     "no-nested-ternary": [ "off" ],
     "no-loop-func": [ "off" ],
     "operator-linebreak": [ "off" ],
@@ -41,6 +41,7 @@
     "quote-props": [ "error", "as-needed" ],
     "jsx-quotes": [ "error", "prefer-single" ],
     "no-unused-vars": [ "off" ],
+    "react/react-in-jsx-scope": [ "off" ],
     "@typescript-eslint/no-unused-vars": ["warn", {
       "args": "after-used",
       "argsIgnorePattern": "^_",

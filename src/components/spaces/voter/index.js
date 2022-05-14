@@ -182,6 +182,10 @@ function UserAdmin() {
 
 Voter.propTypes = {
     space: PropTypes.string.isRequired,
+    roles: PropTypes.instanceOf(Set).isRequired,
+    userinfo: PropTypes.shape({
+        username: PropTypes.string.isRequired,
+    }),
     stories: PropTypes.arrayOf(PropTypes.shape({
         id: PropTypes.string,
     })).isRequired,
@@ -308,17 +312,13 @@ function StoryDisplayItem({ story, title, setEditMode }) {
                     value={vote}
                     minValue={storyMin}
                     maxValue={storyMax}
-                    onChange={vote => {
-                        mutate({ vote, otherVotes }, false)
-                    }}
-                    onBlur={() => {
-                        mutate()
-                    }}
+                    onChange={vote => mutate({ vote, otherVotes }, false)}
+                    onBlur={() => mutate()}
                     label={<Flex width={'size-500'} justifyContent={'end'}>Vote</Flex>}
                     labelPosition={'side'}
                     /* extra spaces are to align label sizes */
                     getValueLabel={value => `${closestStorySize(value)}${' '.repeat(5)}`}
-                    onChangeEnd={async value => {
+                    onChangeEnd={async (value) => {
                         const closest = closestStorySize(value)
                         mutate({ vote: closest, otherVotes }, false)
                         await fetch(`/api/s/${space}/stories/${story}/vote`, {

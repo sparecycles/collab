@@ -1,7 +1,6 @@
 import React, { Fragment } from 'react'
 import Head from 'next/head'
 import spaces from 'lib/common/spaces'
-import redisClient from 'lib/server/redis-client'
 import Cookies from 'cookies'
 import SpaceContext from 'components/space/SpaceContext'
 import { getSession } from 'lib/server/session'
@@ -53,6 +52,7 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
 Space.propTypes = {
     pageTitle: PropTypes.string,
     type: PropTypes.string.isRequired,
+    user: PropTypes.string.isRequired,
 }
 
 export default function Space({ pageTitle, type, user, ...props }) {

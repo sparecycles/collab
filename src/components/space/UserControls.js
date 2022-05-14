@@ -4,6 +4,11 @@ import CloneStamp from '@spectrum-icons/workflow/CloneStamp'
 import CropRotate from '@spectrum-icons/workflow/CropRotate'
 import ShowMenu from '@spectrum-icons/workflow/ShowMenu'
 import Slice from '@spectrum-icons/workflow/Slice'
+import PropTypes from 'lib/common/react-util/prop-types'
+
+UserControls.propTypes = {
+    user: PropTypes.string.isRequired,
+}
 
 export default function UserControls({ user, ...props }) {
     return (

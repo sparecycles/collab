@@ -3,7 +3,6 @@ import { Flex, Form, TextField, Text } from '@adobe/react-spectrum'
 
 import Cookies from 'cookies'
 import formParser from 'lib/server/form-parser'
-import redisClient from 'lib/server/redis-client'
 import spaces from 'lib/common/spaces'
 import { getSession } from 'lib/server/session'
 import crypto from 'lib/server/node/crypto'

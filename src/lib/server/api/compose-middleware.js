@@ -23,11 +23,11 @@ function provideContextData(req, res, name) {
         rejected: false,
     }
 
-    const promise = dataPromise.then(result => {
+    const promise = dataPromise.then((result) => {
         promiseRecord.accepted = true
         promiseRecord.result = result
         return result
-    }, error => {
+    }, (error) => {
         promiseRecord.rejected = true
         promiseRecord.result = error
         return Promise.reject(error)

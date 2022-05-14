@@ -18,7 +18,6 @@ import useSWR from 'swr'
 import UserGroup from '@spectrum-icons/workflow/UserGroup'
 import formParser from 'lib/server/form-parser'
 import Head from 'next/head'
-import redisClient from 'lib/server/redis-client'
 import Cookies from 'cookies'
 import spaces from 'lib/common/spaces'
 import { getSession } from 'lib/server/session'
@@ -54,7 +53,7 @@ export async function getServerSideProps({ req, res }) {
         space = space || crypto.randomUUID()
 
         try {
-            const result = await RedisContext.isolated(async () => {
+            await RedisContext.isolated(async () => {
                 userSessionSchema.spaces(space).$watch()
 
                 const type = await userSessionSchema.spaces(space).$get('type')
@@ -137,7 +136,7 @@ function ErrorDisplay({ type, message }) {
     return (
         <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
             { <></> }
-            {close => (
+            {_close => (
                 <SpectrumProvider theme={lightTheme}>
                     <AlertDialog variant={'warning'} title={title} primaryActionLabel={'Okay'}>
                         { message }

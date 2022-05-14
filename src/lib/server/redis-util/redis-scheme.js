@@ -1,7 +1,6 @@
-import redisClient from '../redis-client'
 import RedisContext, { currentRedisClient } from './redis-context'
 
-const commonOps = (path) => ({
+const commonOps = path => ({
     path: () => path,
     exists: () => currentRedisClient().exists(path),
     watch: () => currentRedisClient().watch(path),
@@ -23,7 +22,7 @@ const scheme = {
     hash: path => ({
         ...scheme.common(path),
         $getAll: () => currentRedisClient().hGetAll(path),
-        $get: (field) => currentRedisClient().hGet(path, field),
+        $get: field => currentRedisClient().hGet(path, field),
         $set: (...args) => currentRedisClient().hSet(path, ...args),
     }),
     hashSet: (path, subpaths = {}, itempaths = _id => ({})) => id => !id ? {
@@ -72,15 +71,15 @@ const scheme = {
     set: path => ({
         ...scheme.common(path),
         $members: () => currentRedisClient().sMembers(path),
-        $isMember: (member) => currentRedisClient().sIsMember(path, member),
-        $add: (member) => currentRedisClient().sAdd(path, member),
-        $rem: (member) => currentRedisClient().sRem(path, member),
+        $isMember: member => currentRedisClient().sIsMember(path, member),
+        $add: member => currentRedisClient().sAdd(path, member),
+        $rem: member => currentRedisClient().sRem(path, member),
     }),
     list: path => ({
         ...scheme.common(path),
         $range: ({ start = 0, stop = -1 } = {}) => currentRedisClient().lRange(path, start, stop),
-        $unshift: (value) => currentRedisClient().lPush(path, value),
-        $push: (value) => currentRedisClient().rPush(path, value),
+        $unshift: value => currentRedisClient().lPush(path, value),
+        $push: value => currentRedisClient().rPush(path, value),
         $shift: () => currentRedisClient().lPop(path),
         $pop: () => currentRedisClient().rPop(path),
         $rem: (element, { count = 0 } = {}) => currentRedisClient().lRem(path, count, element),

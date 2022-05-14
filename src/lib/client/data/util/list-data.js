@@ -27,7 +27,7 @@ export function useEditListItem(name, { id, validate = _value => true, afterMuta
     const keyMappingFactory = useKeyMappingFactory()
 
     if (id) {
-        return async event => {
+        return async (event) => {
             event.preventDefault?.()
 
             const data = formData(event.target)
@@ -38,7 +38,7 @@ export function useEditListItem(name, { id, validate = _value => true, afterMuta
             }
 
             if (data) {
-                await mutate(name, list => {
+                await mutate(name, (list) => {
                     let itemIndex = list.findIndex(({ id: itemId }) => id === itemId)
                     const update = [...list]
                     update[itemIndex] = { ...update[itemIndex], ...data }
@@ -56,7 +56,7 @@ export function useEditListItem(name, { id, validate = _value => true, afterMuta
         }
     }
 
-    return async submitEvent => {
+    return async (submitEvent) => {
         submitEvent.preventDefault()
 
         const { localKey, setKeyMapping } = keyMappingFactory()
