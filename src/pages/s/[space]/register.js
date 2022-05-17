@@ -26,6 +26,11 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         return { redirect: { statusCode: 303, destination: `/` } }
     }
 
+    if (!spaces[type]) {
+        cookies.set('last-error', `space ${space} is not configured (type=${type} is wrong)`)
+        return { redirect: { statusCode: 303, destination: `/` } }
+    }
+
     const { session, generated } = getSession(cookies)
 
     if (req.method === 'POST') {

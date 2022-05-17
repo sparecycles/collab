@@ -19,6 +19,11 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
         return { redirect: { statusCode: 303, destination: `/` } }
     }
 
+    if (!spaces[type]) {
+        cookies.set('last-error', `space ${space} is not configured (type=${type} is wrong)`)
+        return { redirect: { statusCode: 303, destination: `/` } }
+    }
+
     const { session } = getSession(cookies)
 
     const [user, roles] = await Promise.all([
@@ -33,7 +38,7 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
     }
 
     const { props = {} } = await (spaces[type].getServerSideProps || Function.prototype)({
-        req, res, ...other, params: { space, session, user, config },
+        req, res, ...other, params: { space, session, user, roles, config },
     }) || {}
 
     return {
@@ -53,10 +58,13 @@ Space.propTypes = {
     pageTitle: PropTypes.string,
     type: PropTypes.string.isRequired,
     user: PropTypes.string.isRequired,
+    roles: PropTypes.arrayOf(PropTypes.string).isRequired,
 }
 
-export default function Space({ pageTitle, type, user, ...props }) {
+export default function Space({ pageTitle, type, user, roles, ...props }) {
     const { Component } = spaces[type]
+
+    const spaceProps = { user, roles: new Set(roles), ...props }
 
     return (
         <Fragment>
@@ -66,9 +74,9 @@ export default function Space({ pageTitle, type, user, ...props }) {
                 <link rel={'icon'} href={'/favicon.ico'} />
             </Head>
 
-            <SpaceContext.Provider value={{ type, user, ...props }}>
+            <SpaceContext.Provider value={{ type, ...spaceProps }}>
                 <UserControls position='fixed' bottom='size-100' right='size-100' user={user} />
-                <Component {...props} />
+                <Component {...spaceProps} />
             </SpaceContext.Provider>
         </Fragment>
     )

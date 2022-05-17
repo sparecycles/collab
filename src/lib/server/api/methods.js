@@ -3,7 +3,7 @@ function handlerNames(method) {
 }
 
 /** @type { (Handlers: import('next').NextApiHandler | { [_:string]: import('next').NextApiHandler }): import('next').NextApiHandler} */
-export default function methods(handlers) {
+export default function methods(handlers, defaultHandler = null) {
     if (typeof handlers === 'function') {
         return handlers
     }
@@ -15,7 +15,7 @@ export default function methods(handlers) {
     return (req, res, ...args) => {
         const method = req.method.toLowerCase()
 
-        const handler = fun(...handlerNames(method).map(m => handlers[m]))
+        const handler = fun(...handlerNames(method).map(m => handlers[m])) || defaultHandler
 
         return handler && handler(req, res, ...args)
     }

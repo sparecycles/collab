@@ -5,6 +5,7 @@ export type CommonOps = {
     $exists(): Promise<boolean>
     $watch(): Promise<void>
     $del(): Promise<boolean>
+    $expire(ttl: number): Promise<boolean>
 }
 
 export type KeyOps = {

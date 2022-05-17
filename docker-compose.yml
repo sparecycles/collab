@@ -1,5 +1,13 @@
 version: '3.0'
 services:
+  collab:
+    build: .
+    ports:
+      - 3000:3000
+    environment:
+      - REDIS_HOSTS=redis
+    links:
+      - redis
   redis:
     image: redis
     ports:

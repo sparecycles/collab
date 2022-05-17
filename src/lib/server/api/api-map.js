@@ -99,7 +99,7 @@ export async function handleWithApiMap(req, res, api, apiPath, queryMixin = {}) 
 
     let { node, path, query } = navigate(api, apiPath, {
         collector: ({ $inherited, $mixin, $context }, here) => {
-            middleware.push(...repackageMiddleware([$inherited || [], ...here && $mixin || []].flat()))
+            middleware.push(...repackageMiddleware([$inherited || [], here && $mixin || []].flat()))
             Object.assign(context, $context || {})
         },
     })

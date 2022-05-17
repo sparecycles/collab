@@ -30,6 +30,30 @@ function spaceNameInvalid(space) {
     return /[^a-z0-9_-]/i.test(space)
 }
 
+async function simulateErrorConditionsCreatingASpace(space) {
+    if (space.startsWith('error-')) {
+        throw new Error(space.replace(/^error-/, ''))
+    }
+
+    if (space.startsWith('conflict-')) {
+        await scheme.hash(userSessionSchema.spaces(space).$path()).$set({ type: 'conflict' })
+    }
+}
+
+async function generateUnusedSpaceName() {
+    let space
+
+    do {
+        space = crypto.randomBytes(8).readBigUInt64BE().toString(36)
+            .replace(/[l1i]/g, '')
+            .replace(/[0]/g, '')
+            .replace(/[5]/g, '')
+            .slice(0, 5).toUpperCase()
+    } while (await userSessionSchema.spaces(space).$exists())
+
+    return space
+}
+
 /** @type {import('next').GetServerSideProps} */
 export async function getServerSideProps({ req, res }) {
     const { session, generated } = getSession(new Cookies(req, res))
@@ -50,7 +74,8 @@ export async function getServerSideProps({ req, res }) {
             }
         }
 
-        space = space || crypto.randomUUID()
+        // make sure we have a space name, generate an unused one
+        space = space || await generateUnusedSpaceName()
 
         try {
             await RedisContext.isolated(async () => {
@@ -61,13 +86,7 @@ export async function getServerSideProps({ req, res }) {
                     throw new WatchError(`space ${space} already exists`)
                 }
 
-                if (space.startsWith('error--')) {
-                    throw new Error(space.replace(/^error--/, ''))
-                }
-
-                if (space.startsWith('conflict--')) {
-                    await scheme.hash(userSessionSchema.spaces(space).$path()).$set({ type: 'conflict' })
-                }
+                await simulateErrorConditionsCreatingASpace(space)
             }).multi(async () => {
                 userSessionSchema.spaces(space).$set({ type, 'creator-session': session })
             }).exec()
@@ -197,10 +216,10 @@ export default function Home({ error }) {
                         isQuiet
                         minHeight={'size-1250'}
                         name={'space'}
-                        label={'pick a space name'}
+                        label={'pick a space name (optional)'}
                         value={space}
-                        placeholder={'(random)'}
                         onChange={setSpace}
+                        description={'choose a custom name for your space or a random one will be generated'}
                         validationState={isSpaceNameInvalid || spaceExists ? 'invalid' : 'valid'}
                         errorMessage={isSpaceNameInvalid
                             ? `space name has invalid characters`

@@ -3,7 +3,12 @@ import methods from 'lib/server/api/methods'
 import { getSession } from 'lib/server/session'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
 
+import { default as pathApi } from './[...path]'
+
 export default methods({
+    $any(req, res) {
+        return pathApi(req, res)
+    },
     async $get(req, res) {
         const { session } = getSession(new Cookies(req, res), false)
 

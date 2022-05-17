@@ -14,6 +14,7 @@ const scheme = {
         $exists: () => currentRedisClient().exists(path),
         $watch: () => currentRedisClient().watch(path),
         $del: () => currentRedisClient().del(path),
+        $expire: time => currentRedisClient().expire(path, time),
     }),
     key: path => ({
         ...scheme.common(path),

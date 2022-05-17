@@ -15,6 +15,11 @@ import {
     TextField,
     useProvider,
     Well,
+    Button,
+    Dialog,
+    DialogTrigger,
+    Divider,
+    ButtonGroup,
 } from '@adobe/react-spectrum'
 import { useLayoutEffect } from '@react-aria/utils'
 import { ClearButton } from '@react-spectrum/button'
@@ -42,13 +47,19 @@ export const roles = {
     creator: ['voter', 'admin'],
 }
 
-const voterScheme = {
+const schema = {
     spaces: space => ({
         path: () => `collab:spaces:${space}`,
         stories: scheme.hashList(`collab:spaces:${space}:stories`),
-        users: user => ({
+        users: scheme.hashSet(`collab:spaces:${space}:users`, {}, user => ({
             votes: () => scheme.hash(`collab:spaces:${space}:users:${user}:votes`),
-        }),
+        })),
+        async $del() {
+            return Promise.all([
+                schema.spaces(space).stories().$del(),
+                schema.spaces(space).users().$del(),
+            ])
+        },
     }),
 }
 
@@ -94,6 +105,17 @@ export const api = {
         },
         adminRole: roleContext('admin'),
     },
+    $mixin: { $delete: requireRoleContext('adminRole') },
+    async $delete({ query: { space } }, res) {
+        try {
+            await schema.spaces(space).$del()
+            await userSessionSchema.spaces(space).$del()
+        } catch (ex) {
+            console.warn('failed to delete space', ex)
+            return res.status(500).end()
+        }
+        return res.status(204).end()
+    },
     users: {
         $inherited: { $get: requireRoleContext('adminRole') },
         $get({ context: { allUsers } }, res) {
@@ -106,13 +128,13 @@ export const api = {
             },
         },
     },
-    stories: apiStructures.hashList(({ space }) => voterScheme.spaces(space).stories, '[story]', {
+    stories: apiStructures.hashList(({ space }) => schema.spaces(space).stories, '[story]', {
         /** @type {import('lib/common/spaces').ApiMap<{ context: { user: string, roles: Set<string> } }>} */
         '[story]': {
             vote: {
                 async $put({ body, context: { user }, query: { space, story } }, res) {
                     const { vote } = body
-                    voterScheme.spaces(space).users(user).votes().$set({ [story]: vote })
+                    schema.spaces(space).users(user).votes().$set({ [story]: vote })
                     res.status(204).end()
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
@@ -121,9 +143,9 @@ export const api = {
                     const otherUsers = allUserIds.filter(id => id !== user)
 
                     let [vote, otherVotes] = await Promise.all([
-                        voterScheme.spaces(space).users(user).votes().$get(story),
+                        schema.spaces(space).users(user).votes().$get(story),
                         Promise.all(otherUsers.map(async other =>
-                            (await voterScheme.spaces(space).users(other).votes().$get(story)) || 3
+                            (await schema.spaces(space).users(other).votes().$get(story)) || 3
                         )),
                     ])
 
@@ -141,7 +163,7 @@ export const api = {
 export async function getServerSideProps({ params: { space } }) {
     return { props: {
         pageTitle: 'Grooming',
-        stories: await voterScheme.spaces(space).stories().$allItems(),
+        stories: await schema.spaces(space).stories().$allItems(),
     } }
 }
 
@@ -182,7 +204,7 @@ function UserAdmin() {
 
 Voter.propTypes = {
     space: PropTypes.string.isRequired,
-    roles: PropTypes.instanceOf(Set).isRequired,
+    roles: PropTypes.instanceOf(Set),
     userinfo: PropTypes.shape({
         username: PropTypes.string.isRequired,
     }),
@@ -198,8 +220,6 @@ export default function Voter({ space, roles, stories: initialStories, userinfo:
         fallbackData: initialStories,
         refreshInterval: 1000,
     })
-
-    let hasRole = Set.prototype.has.bind(useRef(new Set(roles)).current)
 
     const keyMapping = useKeyMapping()
 
@@ -219,7 +239,9 @@ export default function Voter({ space, roles, stories: initialStories, userinfo:
                     <Switch label='show vote' position={'absolute'} top='size-130' right='size-130'
                         defaultSelected onChange={setShowVotes} value={showVotes}/>
                     <Heading level={1}><Text>Groom Stories {username}</Text></Heading>
-                    { hasRole('admin') ? <UserAdmin/> : null }
+                    { roles.has('admin') ? <UserAdmin/> : null }
+                    { /* roles.has('admin') ? <DeleteRoomButton
+                        position={'fixed'} bottom={'0rem'} left={'0rem'}/> : null */ }
                     { stories?.map(({ id, ...props }) => (
                         <StoryItem key={keyMapping(id)} story={id} {...props} />
                     )) }
@@ -227,6 +249,39 @@ export default function Voter({ space, roles, stories: initialStories, userinfo:
                 </Flex>
             </ShowVoteContext.Provider>
         </Fragment>
+    )
+}
+
+function DeleteRoomButton({ ...props } = {}) {
+    const { space, roles } = useContext(SpaceContext)
+
+    if (!roles.has('admin')) {
+        return null
+    }
+
+    return (
+        <DialogTrigger>
+            <ClearButton {...props}/>
+            { close => (
+                <Dialog>
+                    <Heading>Are you sure you want to delete the room?</Heading>
+                    <Divider/>
+                    <Content>
+                        Delete the room entirely.
+                    </Content>
+                    <ButtonGroup>
+                        <Button variant='cta' onPress={async () => {
+                            const response = await fetch(`/api/s/${space}`, { method: 'DELETE' })
+                            if (response.status >= 200 && response.status < 300) {
+                                window.location = '/?space-deleted'
+                            }
+                            close()
+                        }}>Yes, delete the room</Button>
+                        <Button variant='secondary' onPress={close}>No, keep the room</Button>
+                    </ButtonGroup>
+                </Dialog>
+            ) }
+        </DialogTrigger>
     )
 }
 

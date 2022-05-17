@@ -6,7 +6,7 @@ import { handleWithApiMap } from 'lib/server/api/api-map'
 
 /** @type {import('next').NextApiHandler} */
 export default async function api(req, res) {
-    let { space, path: queryPath } = req.query
+    let { space, path: queryPath = [] } = req.query
 
     const { session } = getSession(new Cookies(req, res), false)
 
