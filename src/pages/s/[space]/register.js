@@ -19,7 +19,7 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         type,
         'creator-session': creatorSession,
         ...config
-    } = await userSessionSchema.spaces(space).$getAll()
+    } = await userSessionSchema.collab.spaces(space).$get()
 
     if (!type) {
         cookies.set('last-error', `space ${space} does not exist`, { httpOnly })
@@ -46,10 +46,10 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         if (username) {
             cookies.set('username', username, { maxAge: 60 * 60 * 24 * 7 })
 
-            let user = await userSessionSchema.spaces(space).sessions(session).$get('user')
+            let user = await userSessionSchema.collab.spaces(space).sessions(session).$get('user')
 
             if (user) {
-                await userSessionSchema.spaces(space).users(user).$set({ username })
+                await userSessionSchema.collab.spaces(space).users(user).$set({ username })
             } else {
                 user = crypto.randomUUID()
 
@@ -57,9 +57,9 @@ export async function getServerSideProps({ req, res, params: { space } }) {
                 const initialRoles = session === creatorSession && roles.creator || roles.user || []
 
                 await Promise.all([
-                    userSessionSchema.spaces(space).users(user).$set({ username }),
-                    userSessionSchema.spaces(space).sessions(session).$set({ user }),
-                    userSessionSchema.spaces(space).sessions(session).roles().$add(initialRoles),
+                    userSessionSchema.collab.spaces(space).users(user).$set({ username }),
+                    userSessionSchema.collab.spaces(space).sessions(session).$set({ user }),
+                    userSessionSchema.collab.spaces(space).sessions(session).roles.$add(initialRoles),
                 ])
             }
 

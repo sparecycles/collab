@@ -9,7 +9,7 @@ const httpOnly = true
 export async function getServerSideProps({ req, res, params: { xfer } }) {
     const cookies = new Cookies(req, res)
 
-    const { space, session: originalSession } = await xferScheme.xfer(xfer).$getAll()
+    const { space, session: originalSession } = await xferScheme.collab.xfer(xfer).$get()
 
     const { session, generated } = getSession(cookies)
 
@@ -22,10 +22,10 @@ export async function getServerSideProps({ req, res, params: { xfer } }) {
         return { redirect: { destination: '/' } }
     }
 
-    const user = await userSessionSchema.spaces(space).sessions(originalSession).$get('user')
-    await userSessionSchema.spaces(space).sessions(session).$set({ user })
+    const user = await userSessionSchema.collab.spaces(space).sessions(originalSession).$get('user')
+    await userSessionSchema.collab.spaces(space).sessions(session).$set({ user })
 
-    xferScheme.xfer(xfer).$expire(1)
+    xferScheme.collab.xfer(xfer).$expire(1)
 
     return { redirect: { destination: `/s/${space}` } }
 }

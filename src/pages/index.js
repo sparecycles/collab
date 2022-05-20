@@ -22,9 +22,8 @@ import Cookies from 'cookies'
 import spaces from 'lib/common/spaces'
 import { getSession } from 'lib/server/session'
 import PropTypes from 'lib/common/react-util/prop-types'
-import RedisContext from 'lib/server/redis-util/redis-context'
+import RedisContext, { contextRedisClient } from 'lib/server/redis-util/redis-context'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
-import scheme from 'lib/server/redis-util/redis-scheme'
 
 function spaceNameInvalid(space) {
     return /[^a-z0-9_-]/i.test(space)
@@ -36,7 +35,7 @@ async function simulateErrorConditionsCreatingASpace(space) {
     }
 
     if (space.startsWith('conflict-')) {
-        await scheme.hash(userSessionSchema.spaces(space).$path()).$set({ type: 'conflict' })
+        await contextRedisClient('unsafe').hSet(userSessionSchema.collab.spaces(space).$path(), { type: 'conflict' })
     }
 }
 
@@ -49,7 +48,7 @@ async function generateUnusedSpaceName() {
             .replace(/[0]/g, '')
             .replace(/[5]/g, '')
             .slice(0, 5).toUpperCase()
-    } while (await userSessionSchema.spaces(space).$exists())
+    } while (await userSessionSchema.collab.spaces.$has(space))
 
     return space
 }
@@ -79,16 +78,16 @@ export async function getServerSideProps({ req, res }) {
 
         try {
             await RedisContext.isolated(async () => {
-                userSessionSchema.spaces(space).$watch()
+                userSessionSchema.collab.spaces(space).$watch()
 
-                const type = await userSessionSchema.spaces(space).$get('type')
+                const type = await userSessionSchema.collab.spaces(space).$get('type')
                 if (type) {
                     throw new WatchError(`space ${space} already exists`)
                 }
 
                 await simulateErrorConditionsCreatingASpace(space)
             }).multi(async () => {
-                userSessionSchema.spaces(space).$set({ type, 'creator-session': session })
+                userSessionSchema.collab.spaces(space).$set({ type, 'creator-session': session })
             }).exec()
 
             return { redirect: { statusCode: 303, destination: `/s/${space}/register` } }

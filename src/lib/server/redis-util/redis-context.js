@@ -50,8 +50,33 @@ export async function withRedisClient(type, callback, ...args) {
     }
 }
 
-export function currentRedisClient() {
-    const { current: redis = redisClient } = redisContextStore.getStore() || {}
+/** @type {(mode?: 'w'|'r'|'rw'|'i'|'unsafe') => typeof redisClient} */
+export function contextRedisClient(mode) {
+    const { current: redis = redisClient, isolated, multi } = redisContextStore.getStore() || {}
+
+    if (mode === 'unsafe') {
+        return redisClient
+    }
+
+    if (mode === 'i') {
+        if (!isolated) {
+            throw new Error('isolated context requested without an active context')
+        }
+        return isolated
+    }
+
+    // if there's an active context, ... multi does not support reading, so return isolated instead
+    if (mode === 'r' || mode === 'rw') {
+        if (redis === multi) {
+            return isolated
+        }
+    }
+
+    // if there's an active multi in the context and we only need to write, we can use it.
+    if (mode === 'w' && multi) {
+        return multi
+    }
+
     return redis
 }
 
@@ -74,7 +99,7 @@ const RedisContext = {
 
         multiCallbackPromise.then(multiCallback => withRedisClient('isolated', async () => {
             try {
-                const isolatedResult = await isolatedCallback(...args)
+                const isolatedResult = await (isolatedCallback || Function.prototype)(...args)
 
                 const multiResult = await withRedisClient('multi', multiCallback, isolatedResult)
 
@@ -85,8 +110,8 @@ const RedisContext = {
         }))
 
         return {
-            multi(callback) {
-                multiCallbackPromise.resolve(callback)
+            multi(multiCallback) {
+                multiCallbackPromise.resolve(multiCallback || Function.prototype)
                 return {
                     async exec() {
                         const { result: multiResult, execResult } = await execReadyPromise
@@ -95,6 +120,9 @@ const RedisContext = {
                 }
             },
         }
+    },
+    multi(fn) {
+        return RedisContext.isolated().multi(fn)
     },
 }
 

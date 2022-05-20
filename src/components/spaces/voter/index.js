@@ -31,8 +31,8 @@ import SpaceContext from 'components/space/SpaceContext'
 import GraphBullet from '@spectrum-icons/workflow/GraphBullet'
 import apiStructures from 'lib/common/api-structures'
 import PropTypes from 'lib/common/react-util/prop-types'
-import scheme from 'lib/server/redis-util/redis-scheme'
 import userSessionSchema from 'lib/server/data/schemas/user-session'
+import schema, { mergeSchemas } from 'lib/server/redis-util/redis-schema'
 
 /** @type {import('lib/common/spaces').SpaceChoice} */
 export const choice = {
@@ -47,28 +47,18 @@ export const roles = {
     creator: ['voter', 'admin'],
 }
 
-const schema = {
-    spaces: space => ({
-        path: () => `collab:spaces:${space}`,
-        stories: scheme.hashList(`collab:spaces:${space}:stories`),
-        users: scheme.hashSet(`collab:spaces:${space}:users`, {}, user => ({
-            votes: () => scheme.hash(`collab:spaces:${space}:users:${user}:votes`),
+const voterSchema = mergeSchemas?.(userSessionSchema, schema?.(({ hash, set, range }) => ({
+    collab: {
+        spaces: set(hash({
+            stories: range(hash()),
+            users: set(hash({
+                votes: hash(),
+            })),
         })),
-        async $del() {
-            return Promise.all([
-                schema.spaces(space).stories().$del(),
-                schema.spaces(space).users().$del(),
-            ])
-        },
-    }),
-}
+    },
+})))
 
-function roleContext(...checks) {
-    return ({ context: { roles } }) => checks.every(role => typeof role === 'string'
-        ? roles.has(role)
-        : role(roles)
-    )
-}
+const roleContext = role => ({ context: { roles } }) => roles.has(role)
 
 function requireRoleContext(...checks) {
     const stringChecks = checks.filter(check => typeof check === 'string')
@@ -92,24 +82,23 @@ function requireRoleContext(...checks) {
 export const api = {
     $context: {
         user({ query: { space, session } }) {
-            return userSessionSchema.spaces(space).sessions(session).$get('user')
+            return voterSchema.collab.spaces(space).sessions(session).$get('user')
         },
-        async roles({ query: { space, session } }) {
-            return new Set(await userSessionSchema.spaces(space).sessions(session).roles().$members())
+        roles({ query: { space, session } }) {
+            return voterSchema.collab.spaces(space).sessions(session).roles.$get()
         },
         userinfo({ context: { user }, query: { space } }) {
-            return userSessionSchema.spaces(space).users(user).$getAll()
+            return voterSchema.collab.spaces(space).users(user).$get()
         },
         allUsers({ query: { space } }) {
-            return userSessionSchema.spaces(space).users().$allItems()
+            return voterSchema.collab.spaces(space).users.$items()
         },
         adminRole: roleContext('admin'),
     },
     $mixin: { $delete: requireRoleContext('adminRole') },
     async $delete({ query: { space } }, res) {
         try {
-            await schema.spaces(space).$del()
-            await userSessionSchema.spaces(space).$del()
+            await voterSchema.collab.spaces(space).$del()
         } catch (ex) {
             console.warn('failed to delete space', ex)
             return res.status(500).end()
@@ -123,29 +112,29 @@ export const api = {
         },
         '[userId]': {
             $delete({ query: { space, userId } }, res) {
-                userSessionSchema.spaces(space).users(userId).$del()
+                voterSchema.collab.spaces(space).users(userId).$del()
                 return res.status(204).end()
             },
         },
     },
-    stories: apiStructures.hashList(({ space }) => schema.spaces(space).stories, '[story]', {
+    stories: apiStructures.hashList(({ space }) => voterSchema.collab.spaces(space).stories, '[story]', {
         /** @type {import('lib/common/spaces').ApiMap<{ context: { user: string, roles: Set<string> } }>} */
         '[story]': {
             vote: {
                 async $put({ body, context: { user }, query: { space, story } }, res) {
                     const { vote } = body
-                    schema.spaces(space).users(user).votes().$set({ [story]: vote })
+                    voterSchema.collab.spaces(space).users(user).votes.$set({ [story]: vote })
                     res.status(204).end()
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
-                    const allUserIds = await userSessionSchema.spaces(space).users().$members()
+                    const allUserIds = [...await voterSchema.collab.spaces(space).users.$get()]
 
                     const otherUsers = allUserIds.filter(id => id !== user)
 
                     let [vote, otherVotes] = await Promise.all([
-                        schema.spaces(space).users(user).votes().$get(story),
+                        voterSchema.collab.spaces(space).users(user).votes.$get(story),
                         Promise.all(otherUsers.map(async other =>
-                            (await schema.spaces(space).users(other).votes().$get(story)) || 3
+                            (await voterSchema.collab.spaces(space).users(other).votes.$get(story)) || 3
                         )),
                     ])
 
@@ -163,7 +152,7 @@ export const api = {
 export async function getServerSideProps({ params: { space } }) {
     return { props: {
         pageTitle: 'Grooming',
-        stories: await schema.spaces(space).stories().$allItems(),
+        stories: await voterSchema.collab.spaces(space).stories.$items(),
     } }
 }
 

@@ -10,7 +10,7 @@ export default function hashList(hashListFor, param, { [param]: paramMixin, ...m
 
     return {
         async $get({ query }, res) {
-            const list = await hashListFor(query)().$allItems()
+            const list = await hashListFor(query).$items()
 
             return res.json(list)
         },
@@ -18,7 +18,7 @@ export default function hashList(hashListFor, param, { [param]: paramMixin, ...m
             /** @type {{[_:string]: string}} */
             const { id = crypto.randomUUID(), title } = body
 
-            await hashListFor(query)(id).$add({ title })
+            await hashListFor(query)(id).$set({ title })
 
             return res.json({ id })
         },

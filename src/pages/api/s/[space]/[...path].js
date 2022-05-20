@@ -10,7 +10,7 @@ export default async function api(req, res) {
 
     const { session } = getSession(new Cookies(req, res), false)
 
-    const type = await userSessionSchema.spaces(space).$get('type')
+    const type = await userSessionSchema.collab.spaces(space).$get('type')
 
     if (type == null) {
         return res.status(404).end()

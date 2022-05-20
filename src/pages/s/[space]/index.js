@@ -12,7 +12,7 @@ import UserControls from 'components/space/UserControls'
 export async function getServerSideProps({ req, res, params: { space }, ...other }) {
     const cookies = new Cookies(req, res)
 
-    const { type, ...config } = await userSessionSchema.spaces(space).$getAll()
+    const { type, ...config } = await userSessionSchema.collab.spaces(space).$get()
 
     if (!type) {
         cookies.set('last-error', `space ${space} does not exist`)
@@ -27,11 +27,11 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
     const { session } = getSession(cookies)
 
     const [user, roles] = await Promise.all([
-        userSessionSchema.spaces(space).sessions(session).$get('user'),
-        userSessionSchema.spaces(space).sessions(session).roles().$members(),
+        userSessionSchema.collab.spaces(space).sessions(session).$get('user'),
+        userSessionSchema.collab.spaces(space).sessions(session).roles.$get(),
     ])
 
-    const userinfo = user ? await userSessionSchema.spaces(space).users(user).$getAll() : {}
+    const userinfo = user ? await userSessionSchema.collab.spaces(space).users(user).$get() : {}
 
     if (!userinfo.username) {
         return { redirect: { destination: `/s/${space}/register` } }
@@ -47,7 +47,7 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
             type,
             space,
             user,
-            roles: roles || [],
+            roles: [...roles],
             userinfo,
             config,
         },

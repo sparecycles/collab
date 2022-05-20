@@ -14,13 +14,13 @@ export default methods({
 
         const { query: { space } } = req
 
-        const rolesRequest = userSessionSchema.spaces(space).sessions(session).roles().$members()
+        const rolesRequest = userSessionSchema.collab.spaces(space).sessions(session).roles.$get()
 
-        const configRequest = userSessionSchema.spaces(space).$getAll()
+        const configRequest = userSessionSchema.collab.spaces(space).$get()
 
-        const user = await userSessionSchema.spaces(space).sessions(session).$get('user')
+        const user = await userSessionSchema.collab.spaces(space).sessions(session).$get('user')
 
-        const userinfo = user && await userSessionSchema.spaces(space).users(user).$getAll()
+        const userinfo = user && await userSessionSchema.collab.spaces(space).users(user).$get()
 
         const { type } = await configRequest
 

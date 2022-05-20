@@ -1,7 +1,9 @@
-import scheme from 'lib/server/redis-util/redis-scheme'
+import schema from 'lib/server/redis-util/redis-schema'
 
-const xferScheme = {
-    xfer: xfer => scheme.hash(`collab:xfer:${xfer}`),
-}
+const xferScheme = schema(({ set, hash }) => ({
+    collab: {
+        xfer: set(hash()),
+    },
+}))
 
 export default xferScheme

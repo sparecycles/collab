@@ -54,6 +54,7 @@
     "SubmitEvent": false,
     "Set": false,
     "Promise": false,
-    "Reflect": false
+    "Reflect": false,
+    "Proxy": false
   }
 }
