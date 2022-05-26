@@ -1,42 +1,41 @@
 import { createContext, Fragment, useContext, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { useLongPress } from '@react-aria/interactions'
-import { mergeProps } from '@react-aria/utils'
 import { unwrapDOMRef } from '@react-spectrum/utils'
 import {
+    ActionButton,
     Content,
     Flex,
     Form,
     Heading,
-    RangeSlider,
-    Slider,
     Switch,
     Text,
     TextField,
-    useProvider,
-    Well,
     Button,
-    Dialog,
+    Well,
+    ToggleButton,
+    View,
     DialogTrigger,
-    Divider,
+    Dialog,
+    useDialogContainer,
     ButtonGroup,
 } from '@adobe/react-spectrum'
 import { useLayoutEffect } from '@react-aria/utils'
 import { ClearButton } from '@react-spectrum/button'
-import { range } from './math'
-
-import { useDeleteListItem, useEditListItem } from 'lib/client/data/util/list-data'
+import { Field } from '@react-spectrum/label'
+import { useDeleteListItemAction, useEditListItemFormSubmit } from 'lib/client/data/util/list-data'
 import { useKeyMapping } from 'lib/client/data/util/key-mapping-context'
 import SpaceContext from 'components/space/SpaceContext'
-import GraphBullet from '@spectrum-icons/workflow/GraphBullet'
 import apiStructures from 'lib/common/api-structures'
 import PropTypes from 'lib/common/react-util/prop-types'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
+import commonSchema from 'lib/server/data/schemas/common-schema'
 import schema, { mergeSchemas } from 'lib/server/redis-util/redis-schema'
+import Delete from '@spectrum-icons/workflow/Delete'
+import GraphBarVertical from '@spectrum-icons/workflow/GraphBarVertical'
+import Edit from '@spectrum-icons/workflow/Edit'
 
 /** @type {import('lib/common/spaces').SpaceChoice} */
 export const choice = {
-    icon: (<GraphBullet size={'XL'}/>),
+    icon: GraphBarVertical,
     text: 'Voter',
     description: 'Groom Stories with Voter',
     order: 0,
@@ -47,7 +46,7 @@ export const roles = {
     creator: ['voter', 'admin'],
 }
 
-const voterSchema = mergeSchemas?.(userSessionSchema, schema?.(({ hash, set, range }) => ({
+const voterSchema = mergeSchemas?.(commonSchema, schema?.(({ hash, set, range }) => ({
     collab: {
         spaces: set(hash({
             stories: range(hash()),
@@ -84,14 +83,20 @@ export const api = {
         user({ query: { space, session } }) {
             return voterSchema.collab.spaces(space).sessions(session).$get('user')
         },
-        roles({ query: { space, session } }) {
-            return voterSchema.collab.spaces(space).sessions(session).roles.$get()
+        roles({ context: { user }, query: { space } }) {
+            return voterSchema.collab.spaces(space).users(user).roles.$get()
         },
         userinfo({ context: { user }, query: { space } }) {
             return voterSchema.collab.spaces(space).users(user).$get()
         },
         allUsers({ query: { space } }) {
             return voterSchema.collab.spaces(space).users.$items()
+        },
+        async allUsersWithRoles({ context: { allUsers }, query: { space } }) {
+            await Promise.all(Object.entries(allUsers).map(async ([user, value]) => {
+                value.roles = [...await voterSchema.collab.spaces(space).users(user).roles.$get()]
+            }))
+            return allUsers
         },
         adminRole: roleContext('admin'),
     },
@@ -106,13 +111,31 @@ export const api = {
         return res.status(204).end()
     },
     users: {
-        $inherited: { $get: requireRoleContext('adminRole') },
-        $get({ context: { allUsers } }, res) {
-            return res.json(allUsers)
+        $inherited: requireRoleContext('adminRole'),
+        $get({ context: { allUsersWithRoles } }, res) {
+            return res.json(allUsersWithRoles)
         },
-        '[userId]': {
-            $delete({ query: { space, userId } }, res) {
-                voterSchema.collab.spaces(space).users(userId).$del()
+        '[user]': {
+            roles: {
+                '[role]': {
+                    async $get({ query: { space, user, role } }, res) {
+                        if (!await voterSchema.collab.spaces(space).users(user).roles.$has(role)) {
+                            return res.status(404).end(`user ${user} does not have role ${role}`)
+                        }
+                        return res.status(200).end(`user ${user} has role ${role}`)
+                    },
+                    async $post({ query: { space, user, role } }, res) {
+                        await voterSchema.collab.spaces(space).users(user).roles.$add(role)
+                        return res.end()
+                    },
+                    async $delete({ query: { space, user, role } }, res) {
+                        await voterSchema.collab.spaces(space).users(user).roles.$rem(role)
+                        return res.end()
+                    },
+                },
+            },
+            $delete({ query: { space, user } }, res) {
+                voterSchema.collab.spaces(space).users(user).$del()
                 return res.status(204).end()
             },
         },
@@ -128,18 +151,16 @@ export const api = {
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
                     const allUserIds = [...await voterSchema.collab.spaces(space).users.$get()]
-
                     const otherUsers = allUserIds.filter(id => id !== user)
 
                     let [vote, otherVotes] = await Promise.all([
                         voterSchema.collab.spaces(space).users(user).votes.$get(story),
                         Promise.all(otherUsers.map(async other =>
-                            (await voterSchema.collab.spaces(space).users(other).votes.$get(story)) || 3
+                            (await voterSchema.collab.spaces(space).users(other).votes.$get(story))
                         )),
                     ])
 
-                    vote = Number(vote || 3)
-                    otherVotes = otherVotes.map(Number)
+                    otherVotes = otherVotes.sort()
 
                     res.status(200).json({ vote, otherVotes })
                 },
@@ -202,7 +223,7 @@ Voter.propTypes = {
     })).isRequired,
 }
 
-const ShowVoteContext = createContext()
+const ShowYourVoteContext = createContext()
 
 export default function Voter({ space, roles, stories: initialStories, userinfo: { username } }) {
     let { data: stories } = useSWR('stories', async () => (await fetch(`/api/s/${space}/stories`)).json(), {
@@ -212,204 +233,202 @@ export default function Voter({ space, roles, stories: initialStories, userinfo:
 
     const keyMapping = useKeyMapping()
 
-    const [showVotes, setShowVotes] = useState(true)
+    const [showYourVotes, setShowYourVotes] = useState(true)
 
     return (
         <Fragment>
-            <ShowVoteContext.Provider value={showVotes}>
+            <ShowYourVoteContext.Provider value={showYourVotes}>
                 <Flex
+                    position={'relative'}
                     direction={'column'}
                     alignSelf={'center'}
                     minWidth={'80vw'}
                     margin={'size-200'}
                     gap={'size-300'}
-                    position={'relative'}
                 >
-                    <Switch label='show vote' position={'absolute'} top='size-130' right='size-130'
-                        defaultSelected onChange={setShowVotes} value={showVotes}/>
                     <Heading level={1}><Text>Groom Stories {username}</Text></Heading>
                     { roles.has('admin') ? <UserAdmin/> : null }
-                    { /* roles.has('admin') ? <DeleteRoomButton
-                        position={'fixed'} bottom={'0rem'} left={'0rem'}/> : null */ }
+                    <View position={'relative'} width='100vw' height={'single-line-height'}>
+                        <Field label='show votes' labelPosition='side'
+                            position={'absolute'} top='size-50' right='size-50'
+                            width='size-1600'>
+                            <Switch defaultSelected={showYourVotes} onChange={setShowYourVotes} value={showYourVotes}/>
+                        </Field>
+                    </View>
                     { stories?.map(({ id, ...props }) => (
                         <StoryItem key={keyMapping(id)} story={id} {...props} />
                     )) }
-                    <StoryEditItem/>
+                    <StoryEditItem autofocus />
                 </Flex>
-            </ShowVoteContext.Provider>
+            </ShowYourVoteContext.Provider>
         </Fragment>
     )
 }
 
-function DeleteRoomButton({ ...props } = {}) {
-    const { space, roles } = useContext(SpaceContext)
+EditStoryDialog.propTypes = {
+    story: PropTypes.string.isRequired,
+    title: PropTypes.string.isRequired,
+}
 
-    if (!roles.has('admin')) {
-        return null
-    }
+function EditStoryDialog({ story, title }) {
+    const { dismiss } = useDialogContainer()
+    const { onSubmit } = useEditListItemFormSubmit('stories', {
+        id: story,
+        validate({ title }) { return Boolean(title) },
+        afterMutate() { dismiss() },
+    })
+
+    const textfield = useRef()
+    const form = useRef()
+
+    useLayoutEffect(() => {
+        textfield?.current?.focus?.()
+    }, [textfield])
 
     return (
+        <Dialog>
+            <Heading>Edit Story Title</Heading>
+            <Content>
+                <Form ref={form} onSubmit={(event) => {
+                    onSubmit(event)
+                    dismiss()
+                }}>
+                    <TextField ref={textfield} name={'title'} defaultValue={title} />
+                </Form>
+            </Content>
+            <ButtonGroup>
+                <Button variant='cta' onPress={event => fakeSubmit(event, form)}>Save</Button>
+                <Button variant='secondary' onPress={dismiss}>Cancel</Button>
+            </ButtonGroup>
+        </Dialog>
+    )
+}
+
+function fakeSubmit(event, formref) {
+    unwrapDOMRef(formref).current.dispatchEvent(new SubmitEvent('submit', {
+        submitter: event.target,
+        bubbles: true,
+        cancelable: true,
+    }))
+}
+
+EditStoryButton.propTypes = {
+    story: PropTypes.string.isRequired,
+    title: PropTypes.string.isRequired,
+}
+
+function EditStoryButton({ story, title, ...props }) {
+    return (
         <DialogTrigger>
-            <ClearButton {...props}/>
-            { close => (
-                <Dialog>
-                    <Heading>Are you sure you want to delete the room?</Heading>
-                    <Divider/>
-                    <Content>
-                        Delete the room entirely.
-                    </Content>
-                    <ButtonGroup>
-                        <Button variant='cta' onPress={async () => {
-                            const response = await fetch(`/api/s/${space}`, { method: 'DELETE' })
-                            if (response.status >= 200 && response.status < 300) {
-                                window.location = '/?space-deleted'
-                            }
-                            close()
-                        }}>Yes, delete the room</Button>
-                        <Button variant='secondary' onPress={close}>No, keep the room</Button>
-                    </ButtonGroup>
-                </Dialog>
-            ) }
+            <ActionButton variant='secondary' isQuiet
+                {...props}>
+                <Edit/>
+            </ActionButton>
+            <EditStoryDialog story={story} title={title} />
         </DialogTrigger>
     )
 }
 
 DeleteStoryButton.propTypes = {
     story: PropTypes.string.isRequired,
+    title: PropTypes.string.isRequired,
 }
 
-function DeleteStoryButton({ story, ...props }) {
-    return <ClearButton {...props} onPress={useDeleteListItem('stories', { id: story })} />
+function DeleteStoryButton({ story, title, ...props }) {
+    const deleteAction = useDeleteListItemAction('stories', { id: story })
+    return (
+        <DialogTrigger>
+            <ActionButton variant='secondary' isQuiet {...props}>
+                <Delete/>
+            </ActionButton>
+            {dismiss => (
+                <Dialog>
+                    <Heading>Delete Story?</Heading>
+                    <Content>
+                        Are you sure you want to stop grooming story {title}?
+                    </Content>
+                    <ButtonGroup>
+                        <Button variant='secondary' onPress={dismiss}>Keep it</Button>
+                        <Button variant='primary' onPress={deleteAction}>Discard it</Button>
+                    </ButtonGroup>
+                </Dialog>
+            )}
+        </DialogTrigger>
+    )
 }
 
-const storyTitleOffsetPx = -4
-const storySizes = [1, 2, 3, 5, 8, 13, 13]
-const storyMin = storySizes[0]
-const storyMax = storySizes[storySizes.length - 1]
+const storySizes = [1, 2, 3, 5, 8, 13]
 
-const goldenRatio = (Math.sqrt(5) + 1) / 2
-const goldenRatioInv = goldenRatio - 1
-function closestStorySize(value) {
-    return storySizes.find((s, i, ss) => value <= (ss[i + 1] * (goldenRatioInv) + s) / goldenRatio) || storyMax
-}
-
-StoryDisplayItem.propTypes = {
+StoryItem.propTypes = {
     story: PropTypes.string.isRequired,
-    title: PropTypes.string,
-    setEditMode: PropTypes.func.isRequired,
+    title: PropTypes.string.isRequired,
 }
-
-function StoryDisplayItem({ story, title, setEditMode }) {
+function StoryItem({ story, title }) {
     const { space } = useContext(SpaceContext)
-    const { longPressProps } = useLongPress({
-        onLongPress(_event) {
-            setEditMode(true)
-        },
-    })
 
     const { data: { vote, otherVotes }, mutate } = useSWR(`stories:${story}:vote`, async () => {
         const response = await fetch(`/api/s/${space}/stories/${story}/vote`)
         const { vote, otherVotes } = await response.json()
         return { vote, otherVotes }
-    }, { refreshInterval: 1000, fallbackData: { vote: 3, otherVotes: [] } })
+    }, { refreshInterval: 1000, fallbackData: { vote: null, otherVotes: [] } })
 
-    const {
-        low, high,
-    } = range(...otherVotes, vote)
+    const showYourVotes = useContext(ShowYourVoteContext)
 
-    const consensus = {
-        start: low,
-        end: high,
-    }
+    const totalVoters = otherVotes.length + 1
 
-    const gradient = {
-        start: Math.min(vote, consensus.start),
-        end: Math.max(vote, consensus.end),
-    }
+    const voted = [vote, ...otherVotes].filter(Boolean)
 
-    const lightTheme = useProvider()?.colorScheme?.includes('light')
-
-    function percent(s) {
-        const ratio = (s - storyMin) / (storyMax - storyMin)
-
-        return `${Math.min(Math.max(0, ratio), 1) * 100}%`
-    }
-
-    const showVotes = useContext(ShowVoteContext)
+    const voteCounts = voted.reduce((counts, vote) => Object.assign(counts, {
+        [vote]: (counts[vote] || 0) + 1,
+        max: Math.max((counts[vote] || 0) + 1, counts.max),
+    }), { max: 1, totalVoters })
 
     return (
-        <div {...longPressProps}>
-            <Well position={'relative'}>
-                <Content position={'relative'} top={`${storyTitleOffsetPx}px`}>{title}</Content>
-                <RangeSlider position={'absolute'} left={'10%'} top={'-17.5px'} minValue={storyMin} maxValue={storyMax}
-                    width={'80vw'}
-                    value={{ start: closestStorySize(consensus.start), end: closestStorySize(consensus.end) }}
-                    isDisabled
-                    label={<Flex width={'size-500'} justifyContent={'end'}>Size</Flex>}
-                    labelPosition={'side'}
-                />
-                <Slider isHidden={!showVotes}
-                    position={'absolute'}
-                    left={'10%'}
-                    bottom={'0'}
-                    width={'80vw'}
-                    value={vote}
-                    minValue={storyMin}
-                    maxValue={storyMax}
-                    onChange={vote => mutate({ vote, otherVotes }, false)}
-                    onBlur={() => mutate()}
-                    label={<Flex width={'size-500'} justifyContent={'end'}>Vote</Flex>}
-                    labelPosition={'side'}
-                    /* extra spaces are to align label sizes */
-                    getValueLabel={value => `${closestStorySize(value)}${' '.repeat(5)}`}
-                    onChangeEnd={async (value) => {
-                        const closest = closestStorySize(value)
-                        mutate({ vote: closest, otherVotes }, false)
-                        await fetch(`/api/s/${space}/stories/${story}/vote`, {
-                            method: 'put',
-                            body: new URLSearchParams({ vote: closest }),
-                        })
-                        mutate()
-                    }}
-                    trackGradient={lightTheme || false ? [
-                        `rgba(0, 0, 0, 0.0) ${percent(gradient.start)}`,
-                        `rgba(180, 180, 180, 0.5) ${percent((gradient.start * 3 + gradient.end) / 4)}`,
-                        `rgba(180, 180, 180, 1.0) ${percent((gradient.start + gradient.end) / 2)}`,
-                        `rgba(180, 180, 180, 0.5) ${percent((gradient.start + gradient.end * 3) / 4)}`,
-                        `rgba(0, 0, 0, 0.0) ${percent(gradient.end)}`,
-                    ] : [
-                        `rgba(0, 0, 0, 0.0) ${percent(gradient.start)}`,
-                        `rgba(128, 128, 128, 0.5) ${percent((gradient.start * 3 + gradient.end) / 4)}`,
-                        `rgba(128, 128, 128, 1.0) ${percent((gradient.start + gradient.end) / 2)}`,
-                        `rgba(128, 128, 128, 0.5) ${percent((gradient.start + gradient.end * 3) / 4)}`,
-                        `rgba(0, 0, 0, 0.0) ${percent(gradient.end)}`,
-                    ]}
-                />
-                <DeleteStoryButton story={story} position={'absolute'} top={'-7px'} right={'-7px'}/>
-            </Well>
-        </div>
+        <Well position={'relative'} role='region'>
+            <Heading level={3} margin='size-0' marginStart={'size-300'}>{title}</Heading>
+            <Content>
+                <Flex
+                    marginY={'size-200'}
+                    height={'size-800'}
+                    direction={'row'}
+                    gap={'size-100'}
+                    alignItems={'baseline'}>
+                    <View width={'size-0'} height={'40px'} />
+                    { [...storySizes, 'abstain'].map(ivote => (
+                        <View key={`vote-count-${ivote}`}
+                            position='relative'
+                            minWidth={'size-500'}
+                            backgroundColor={'gray-500'}
+                            UNSAFE_style={{
+                                transition: 'min-height 1s ease',
+                            }}
+                            minHeight={`${(voteCounts[ivote] || 0) * 40 / voteCounts.totalVoters + 1}px`} >
+                            <View position={'absolute'} bottom='size-0'>
+                                <ToggleButton position={'absolute'}
+                                    isSelected={showYourVotes && vote === String(ivote)}
+                                    onPress={async () => {
+                                        mutate(({ ...data }) => ({ ...data, vote: ivote }), false)
+                                        await fetch(`/api/s/${space}/stories/${story}/vote`, {
+                                            method: 'put',
+                                            body: new URLSearchParams({ vote: ivote }),
+                                        })
+                                        mutate()
+                                    }}
+                                    type='button'
+                                    height={'size-500'}
+                                    width={'size-500'}
+                                    top={'size-50'}
+                                >{ivote === 'abstain' ? '?' : ivote}</ToggleButton>
+                            </View>
+                        </View>
+                    ))}
+                    <View>{voted.length}/{totalVoters}</View>
+                </Flex>
+            </Content>
+            <DeleteStoryButton story={story} title={title} position={'absolute'} top={'size-0'} right={'size-0'} />
+            <EditStoryButton story={story} title={title} position={'absolute'} top={'size-0'} left={'size-0'} />
+        </Well>
     )
-}
-
-StoryItem.propTypes = {
-    story: PropTypes.string.isRequired,
-    title: PropTypes.string,
-}
-
-function StoryItem({ story, title }) {
-    const [editMode, setEditMode] = useState(false)
-
-    if (editMode) {
-        return (<StoryEditItem
-            autofocus
-            autocommit
-            title={title}
-            story={story}
-            afterMutate={() => setEditMode(false)}
-        />)
-    } else {
-        return <StoryDisplayItem story={story} title={title} setEditMode={setEditMode} />
-    }
 }
 
 StoryEditItem.propTypes = {
@@ -421,9 +440,7 @@ StoryEditItem.propTypes = {
 }
 
 function StoryEditItem({
-    story,
     autofocus,
-    autocommit,
     afterMutate = Function.prototype,
     title: initialTitle = '',
     ...props
@@ -431,39 +448,10 @@ function StoryEditItem({
     const [title, setTitle] = useState(initialTitle)
     const form = useRef()
     const field = useRef()
-    const autoCommitCancelled = useRef(false)
 
     useLayoutEffect(() => autofocus && field.current?.focus?.())
 
-    if (autocommit) {
-        props = mergeProps(props, {
-            /** @type {import('react').FocusEventHandler} */
-            onBlur(event) {
-                if (autoCommitCancelled.current) {
-                    autoCommitCancelled.current = false
-                    afterMutate()
-                    return
-                }
-
-                // fake a submit so that uncommitted changes also take effect
-                unwrapDOMRef(form)?.current?.dispatchEvent(new SubmitEvent('submit', {
-                    submitter: event.target,
-                    bubbles: true,
-                    cancelable: true,
-                }))
-            },
-            /** @type {import('react').KeyboardEventHandler} */
-            onKeyDown(event) {
-                if (event.key === 'Escape') {
-                    autoCommitCancelled.current = true
-                    event.target.blur()
-                }
-            },
-        })
-    }
-
-    const onSubmit = useEditListItem('stories', {
-        id: story,
+    const { onSubmit } = useEditListItemFormSubmit('stories', {
         validate({ title }) {
             return Boolean(title)
         },
@@ -474,18 +462,19 @@ function StoryEditItem({
     })
 
     return (
-        <Well>
-            <Form ref={form} isQuiet onSubmit={onSubmit}>
-                <TextField ref={field} margin={'size-0'} marginBottom={'-11px'}
-                    position={'relative'}
-                    top={`${-4 + storyTitleOffsetPx}px`}
-                    name={'title'}
+        <Form ref={form} isQuiet onSubmit={onSubmit}>
+            <Flex direction={'row'}>
+                <TextField ref={field}
+                    flex
                     aria-label={'Story Title'}
-                    placeholder={'Enter a story for Grooming'}
+                    description={'Add Story for Grooming'}
+                    name={'title'}
                     onChange={setTitle}
                     value={title}
-                    {...props} />
-            </Form>
-        </Well>
+                    {...props}
+                />
+                <Button variant='primary' isQuiet>{'Add Story'}</Button>
+            </Flex>
+        </Form>
     )
 }

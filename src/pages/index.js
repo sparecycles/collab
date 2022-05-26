@@ -9,12 +9,10 @@ import {
     Item,
     Picker,
     Text,
-    TextField,
     Provider as SpectrumProvider,
     lightTheme,
     Flex,
 } from '@adobe/react-spectrum'
-import useSWR from 'swr'
 import UserGroup from '@spectrum-icons/workflow/UserGroup'
 import formParser from 'lib/server/form-parser'
 import Head from 'next/head'
@@ -22,21 +20,11 @@ import Cookies from 'cookies'
 import spaces from 'lib/common/spaces'
 import { getSession } from 'lib/server/session'
 import PropTypes from 'lib/common/react-util/prop-types'
-import RedisContext, { contextRedisClient } from 'lib/server/redis-util/redis-context'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
+import RedisContext from 'lib/server/redis-util/redis-context'
+import commonSchema from 'lib/server/data/schemas/common-schema'
 
 function spaceNameInvalid(space) {
     return /[^a-z0-9_-]/i.test(space)
-}
-
-async function simulateErrorConditionsCreatingASpace(space) {
-    if (space.startsWith('error-')) {
-        throw new Error(space.replace(/^error-/, ''))
-    }
-
-    if (space.startsWith('conflict-')) {
-        await contextRedisClient('unsafe').hSet(userSessionSchema.collab.spaces(space).$path(), { type: 'conflict' })
-    }
 }
 
 async function generateUnusedSpaceName() {
@@ -48,7 +36,7 @@ async function generateUnusedSpaceName() {
             .replace(/[0]/g, '')
             .replace(/[5]/g, '')
             .slice(0, 5).toUpperCase()
-    } while (await userSessionSchema.collab.spaces.$has(space))
+    } while (await commonSchema.collab.spaces.$has(space))
 
     return space
 }
@@ -78,22 +66,20 @@ export async function getServerSideProps({ req, res }) {
 
         try {
             await RedisContext.isolated(async () => {
-                userSessionSchema.collab.spaces(space).$watch()
+                commonSchema.collab.spaces(space).$watch()
 
-                const type = await userSessionSchema.collab.spaces(space).$get('type')
+                const type = await commonSchema.collab.spaces(space).$get('type')
                 if (type) {
                     throw new WatchError(`space ${space} already exists`)
                 }
-
-                await simulateErrorConditionsCreatingASpace(space)
             }).multi(async () => {
-                userSessionSchema.collab.spaces(space).$set({ type, 'creator-session': session })
+                await commonSchema.collab.spaces(space).$set({ type, 'creator-session': session })
             }).exec()
 
             return { redirect: { statusCode: 303, destination: `/s/${space}/register` } }
         } catch (ex) {
             res.statusCode = ex instanceof WatchError ? 409 : 400
-            const message = ex instanceof WatchError ? `space ${space} already exists` : String(ex)
+            const message = ex instanceof WatchError ? ex.message : String(ex)
 
             return {
                 props: { error: { type: 'room:creation', message } },
@@ -154,9 +140,12 @@ function ErrorDisplay({ type, message }) {
     return (
         <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
             { <></> }
-            {_close => (
+            { dismiss => (
                 <SpectrumProvider theme={lightTheme}>
-                    <AlertDialog variant={'warning'} title={title} primaryActionLabel={'Okay'}>
+                    <AlertDialog variant={'warning'}
+                        title={title}
+                        primaryActionLabel={'Okay'}
+                        onPrimaryAction={dismiss}>
                         { message }
                     </AlertDialog>
                 </SpectrumProvider>
@@ -172,19 +161,6 @@ Home.propTypes = {
 
 export default function Home({ error }) {
     const [type, setType] = useState(spaceTypes[0].key)
-
-    const [space, setSpace] = useState('')
-
-    const isSpaceNameInvalid = spaceNameInvalid(space)
-
-    const { data: spaceExists } = useSWR(`${space} exists`, async () => {
-        if (isSpaceNameInvalid || !space) {
-            return false
-        }
-
-        const { status } = await fetch(`/api/s/${encodeURIComponent(space)}`)
-        return status === 200
-    })
 
     return (
         <div>
@@ -203,29 +179,15 @@ export default function Home({ error }) {
                         description={spaceTypesMap[type].description}
                         name={'type'}
                     >
-                        { spaceTypes.map(({ key, icon, text, description }) => (
+                        { spaceTypes.map(({ key, icon: Icon, text, description }) => (
                             <Item key={key} textValue={text}>
-                                { icon || [] }
+                                <Icon/>
                                 <Text>{text}</Text>
                                 <Text slot={'description'}>{description}</Text>
                             </Item>
                         ))}
                     </Picker>
-                    <TextField
-                        isQuiet
-                        minHeight={'size-1250'}
-                        name={'space'}
-                        label={'pick a space name (optional)'}
-                        value={space}
-                        onChange={setSpace}
-                        description={'choose a custom name for your space or a random one will be generated'}
-                        validationState={isSpaceNameInvalid || spaceExists ? 'invalid' : 'valid'}
-                        errorMessage={isSpaceNameInvalid
-                            ? `space name has invalid characters`
-                            : `space ${space} already created`
-                        }
-                    />
-                    <Button type={'submit'} isDisabled={spaceExists}><UserGroup /><Text>Create Space</Text></Button>
+                    <Button type={'submit'}><UserGroup /><Text>Create Space</Text></Button>
                 </Form>
             </Flex>
         </div>

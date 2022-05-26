@@ -5,14 +5,14 @@ import Cookies from 'cookies'
 import SpaceContext from 'components/space/SpaceContext'
 import { getSession } from 'lib/server/session'
 import PropTypes from 'lib/common/react-util/prop-types'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
-import UserControls from 'components/space/UserControls'
+import commonSchema from 'lib/server/data/schemas/common-schema'
+import GeneralControls from 'components/space/GeneralControls'
 
 /** @type {import('next').GetServerSideProps} */
 export async function getServerSideProps({ req, res, params: { space }, ...other }) {
     const cookies = new Cookies(req, res)
 
-    const { type, ...config } = await userSessionSchema.collab.spaces(space).$get()
+    const { type, ...config } = await commonSchema.collab.spaces(space).$get()
 
     if (!type) {
         cookies.set('last-error', `space ${space} does not exist`)
@@ -26,12 +26,11 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
 
     const { session } = getSession(cookies)
 
-    const [user, roles] = await Promise.all([
-        userSessionSchema.collab.spaces(space).sessions(session).$get('user'),
-        userSessionSchema.collab.spaces(space).sessions(session).roles.$get(),
+    const user = await commonSchema.collab.spaces(space).sessions(session).$get('user')
+    const [roles, userinfo] = await Promise.all([
+        commonSchema.collab.spaces(space).users(user).roles.$get(),
+        user ? commonSchema.collab.spaces(space).users(user).$get() : {},
     ])
-
-    const userinfo = user ? await userSessionSchema.collab.spaces(space).users(user).$get() : {}
 
     if (!userinfo.username) {
         return { redirect: { destination: `/s/${space}/register` } }
@@ -75,7 +74,7 @@ export default function Space({ pageTitle, type, user, roles, ...props }) {
             </Head>
 
             <SpaceContext.Provider value={{ type, ...spaceProps }}>
-                <UserControls position='fixed' bottom='size-100' right='size-100' user={user} />
+                <GeneralControls position='fixed' bottom='size-100' right='size-100' user={user} />
                 <Component {...spaceProps} />
             </SpaceContext.Provider>
         </Fragment>

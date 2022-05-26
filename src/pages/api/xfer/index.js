@@ -1,6 +1,6 @@
 import Cookies from 'cookies'
-import xferScheme from 'lib/server/data/schemas/xfer-scheme'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
+import xferScheme from 'lib/server/data/schemas/xfer-schema'
+import commonSchema from 'lib/server/data/schemas/common-schema'
 import crypto from 'lib/server/node/crypto'
 import { getSession } from 'lib/server/session'
 import methods, { _404 } from 'lib/server/api/methods'
@@ -10,14 +10,15 @@ export default methods({
     async $post(req, res) {
         const cookies = new Cookies(req, res)
 
-        const { method, body } = req
+        const { body } = req
 
         /** @type {{ space: string }} */
         const { space } = body
         /** @type {{ session: string }} */
         const { session, generated } = getSession(cookies)
 
-        const roles = await userSessionSchema.collab.spaces(space).sessions(session).roles.$get()
+        const user = await commonSchema.collab.spaces(space).sessions(session).$get('user')
+        const roles = await commonSchema.collab.spaces(space).users(user).roles.$get()
 
         if (generated) {
             return { redirect: { destination: '?session-confirmation' } }

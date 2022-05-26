@@ -1,7 +1,7 @@
 import Cookies from 'cookies'
 import methods from 'lib/server/api/methods'
 import { getSession } from 'lib/server/session'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
+import commonSchema from 'lib/server/data/schemas/common-schema'
 
 import { default as pathApi } from './[...path]'
 
@@ -14,20 +14,21 @@ export default methods({
 
         const { query: { space } } = req
 
-        const rolesRequest = userSessionSchema.collab.spaces(space).sessions(session).roles.$get()
+        const userAsync = commonSchema.collab.spaces(space).sessions(session).$get('user')
 
-        const configRequest = userSessionSchema.collab.spaces(space).$get()
-
-        const user = await userSessionSchema.collab.spaces(space).sessions(session).$get('user')
-
-        const userinfo = user && await userSessionSchema.collab.spaces(space).users(user).$get()
-
-        const { type } = await configRequest
+        const [user, { type }, roles, userinfo] = await Promise.all([
+            userAsync,
+            commonSchema.collab.spaces(space).$get(),
+            userAsync.then(user =>
+                commonSchema.collab.spaces(space).users(user).roles.$get()),
+            userAsync.then(user =>
+                user && commonSchema.collab.spaces(space).users(user).$get()),
+        ])
 
         if (type) {
             return res.json({
                 config: { type },
-                roles: await rolesRequest,
+                roles,
                 user,
                 ...user ? { userinfo: { [user]: userinfo } } : { },
             })

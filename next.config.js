@@ -43,7 +43,8 @@ const transpiledModules = nextTranspileModules([
     '@react-stately/*',
     '@react-types/*',
     '@spectrum-aria/*',
-    '@spectrum-icons/*',
+    '@spectrum-icons/ui',
+    '@spectrum-icons/workflow',
   ].flatMap(
     spec => glob.sync(`${spec}`, { cwd: 'node_modules/' })
   )

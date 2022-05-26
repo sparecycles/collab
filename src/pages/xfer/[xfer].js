@@ -1,6 +1,6 @@
 import Cookies from 'cookies'
-import xferScheme from 'lib/server/data/schemas/xfer-scheme'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
+import xferScheme from 'lib/server/data/schemas/xfer-schema'
+import commonSchema from 'lib/server/data/schemas/common-schema'
 import { getSession } from 'lib/server/session'
 
 const httpOnly = true
@@ -22,8 +22,8 @@ export async function getServerSideProps({ req, res, params: { xfer } }) {
         return { redirect: { destination: '/' } }
     }
 
-    const user = await userSessionSchema.collab.spaces(space).sessions(originalSession).$get('user')
-    await userSessionSchema.collab.spaces(space).sessions(session).$set({ user })
+    const user = await commonSchema.collab.spaces(space).sessions(originalSession).$get('user')
+    await commonSchema.collab.spaces(space).sessions(session).$set({ user })
 
     xferScheme.collab.xfer(xfer).$expire(1)
 

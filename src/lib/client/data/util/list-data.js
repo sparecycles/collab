@@ -4,7 +4,7 @@ import { useContext } from 'react'
 import { useSWRConfig } from 'swr'
 import { useKeyMappingFactory } from './key-mapping-context'
 
-export function useDeleteListItem(name, { id, afterMutate = Function.prototype }) {
+export function useDeleteListItemAction(name, { id, afterMutate = Function.prototype }) {
     const { mutate } = useSWRConfig()
     const { space } = useContext(SpaceContext)
     const urlPath = name.split(':').map(encodeURI).join('/')
@@ -19,7 +19,7 @@ export function useDeleteListItem(name, { id, afterMutate = Function.prototype }
     }
 }
 
-export function useEditListItem(name, { id, validate = _value => true, afterMutate = Function.prototype }) {
+export function useEditListItemFormSubmit(name, { id, validate = _value => true, afterMutate = Function.prototype }) {
     const { mutate } = useSWRConfig()
     const { space } = useContext(SpaceContext)
 
@@ -27,8 +27,8 @@ export function useEditListItem(name, { id, validate = _value => true, afterMuta
     const keyMappingFactory = useKeyMappingFactory()
 
     if (id) {
-        return async (event) => {
-            event.preventDefault?.()
+        return { async onSubmit(event) {
+            event.preventDefault()
 
             const data = formData(event.target)
 
@@ -53,10 +53,10 @@ export function useEditListItem(name, { id, validate = _value => true, afterMuta
                     mutate(name)
                 }
             }
-        }
+        } }
     }
 
-    return async (submitEvent) => {
+    return { async onSubmit(submitEvent) {
         submitEvent.preventDefault()
 
         const { localKey, setKeyMapping } = keyMappingFactory()
@@ -78,5 +78,5 @@ export function useEditListItem(name, { id, validate = _value => true, afterMuta
         } finally {
             mutate(name)
         }
-    }
+    } }
 }

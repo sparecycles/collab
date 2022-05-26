@@ -7,7 +7,8 @@ import spaces from 'lib/common/spaces'
 import { getSession } from 'lib/server/session'
 import crypto from 'lib/server/node/crypto'
 import PropTypes from 'lib/common/react-util/prop-types'
-import userSessionSchema from 'lib/server/data/schemas/user-session'
+import commonSchema from 'lib/server/data/schemas/common-schema'
+import RedisContext from 'lib/server/redis-util/redis-context'
 
 const httpOnly = true
 
@@ -19,7 +20,7 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         type,
         'creator-session': creatorSession,
         ...config
-    } = await userSessionSchema.collab.spaces(space).$get()
+    } = await commonSchema.collab.spaces(space).$get()
 
     if (!type) {
         cookies.set('last-error', `space ${space} does not exist`, { httpOnly })
@@ -46,21 +47,24 @@ export async function getServerSideProps({ req, res, params: { space } }) {
         if (username) {
             cookies.set('username', username, { maxAge: 60 * 60 * 24 * 7 })
 
-            let user = await userSessionSchema.collab.spaces(space).sessions(session).$get('user')
+            let user = await commonSchema.collab.spaces(space).sessions(session).$get('user')
+            if (user && !await commonSchema.collab.spaces(space).users.$has(user)) {
+                user = null
+            }
 
             if (user) {
-                await userSessionSchema.collab.spaces(space).users(user).$set({ username })
+                await commonSchema.collab.spaces(space).users(user).$set({ username })
             } else {
                 user = crypto.randomUUID()
 
                 const { roles } = spaces[type]
                 const initialRoles = session === creatorSession && roles.creator || roles.user || []
 
-                await Promise.all([
-                    userSessionSchema.collab.spaces(space).users(user).$set({ username }),
-                    userSessionSchema.collab.spaces(space).sessions(session).$set({ user }),
-                    userSessionSchema.collab.spaces(space).sessions(session).roles.$add(initialRoles),
-                ])
+                await RedisContext.multi(() => {
+                    commonSchema.collab.spaces(space).sessions(session).$set({ user })
+                    commonSchema.collab.spaces(space).users(user).$set({ username })
+                    commonSchema.collab.spaces(space).users(user).roles.$add(initialRoles)
+                })
             }
 
             return { redirect: { statusCode: 303, destination: `/s/${space}` } }
@@ -85,7 +89,7 @@ Space.propTypes = {
 }
 
 export default function Space({ username, type }) {
-    const { choice } = spaces[type]
+    const { choice: { icon: Icon, text } } = spaces[type]
 
     return (
         <div>
@@ -96,8 +100,8 @@ export default function Space({ username, type }) {
             </Head>
 
             <Flex direction={'column'} gap={'size-200'} alignItems={'center'} margin={'size-200'}>
-                { choice.icon }
-                <Text>{ choice.text }</Text>
+                <Icon/>
+                <Text>{ text }</Text>
                 <Form method={'post'}>
                     <TextField
                         label={'Pick your username'}

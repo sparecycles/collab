@@ -7,16 +7,14 @@ const redisContextStore = new AsyncLocalStorage()
 function addAwaitsToActiveContext(promise) {
     const context = redisContextStore.getStore()
 
-    if (context) {
-        context.awaits.push(promise)
-    }
+    context?.awaits?.push(promise)
 }
 
-export async function withRedisClient(type, callback, ...args) {
-    const context = redisContextStore.getStore()
-    const { current = redisClient } = context || {}
+async function withRedisClient(type, callback, ...args) {
+    const context = redisContextStore.getStore() || {}
+    const { current = redisClient, isolated } = context
 
-    if (!context) {
+    if (!isolated) {
         if (type !== 'isolated') {
             throw new Error('cannot start a redis context: ' + type)
         }
@@ -48,15 +46,13 @@ export async function withRedisClient(type, callback, ...args) {
     if (type === 'exec') {
         return context.execResult
     }
+
+    throw new Error('withRedisClient: unknown client type: ' + type)
 }
 
-/** @type {(mode?: 'w'|'r'|'rw'|'i'|'unsafe') => typeof redisClient} */
+/** @type {(mode?: 'w'|'r'|'rw'|'i') => typeof redisClient} */
 export function contextRedisClient(mode) {
     const { current: redis = redisClient, isolated, multi } = redisContextStore.getStore() || {}
-
-    if (mode === 'unsafe') {
-        return redisClient
-    }
 
     if (mode === 'i') {
         if (!isolated) {

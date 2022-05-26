@@ -8,6 +8,6 @@ export const ContainerOps = createOps('ContainerOps', { isContainer: true, exten
         return this.$mapItems(keys, data)
     },
     async $$delContained() {
-        return await Promise.all([...await this.$get()].map(key => this.$self(key).$del?.()))
+        return await Promise.all([...await this.$get()].map(key => this.$self(key)?.$del()))
     },
 })

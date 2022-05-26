@@ -1,12 +1,21 @@
-/**
- * import space types in /components/spaces
- */
 import Question from '@spectrum-icons/workflow/Question'
 import React from 'react'
 
-const req = require.context('components/spaces', true, /components[/]spaces[/][^/]+(?:[/]|[.]js)$/)
+import * as voter from 'components/spaces/voter'
+import * as planner from 'components/spaces/planner'
 
-function mapImport(path, {
+export default mapImports({
+    voter,
+    planner,
+})
+
+function mapImports(obj) {
+    return Object.entries(obj).reduce((imports, [k, v]) => Object.assign(imports, {
+        [k]: mapImport(k, v),
+    }), {})
+}
+
+function mapImport(type, {
     default: Component,
     getServerSideProps,
     api = {},
@@ -16,15 +25,13 @@ function mapImport(path, {
         creator: ['user', 'creator'],
     },
 }) {
-    const type = spaceType(path)
-
     if (typeof Component !== 'function' && !(Component instanceof React.Component)) {
         throw new Error(
-            `spaces: ${path}: default export not a component for space ${type}`)
+            `spaces: ${type}: default export not a component for space ${type}`)
     }
 
     choice = Object.assign({
-        icon: (<Question size={'XL'}/>),
+        icon: <Question />,
         text: type,
         description: `Create a ${type} space`,
     }, choice)
@@ -37,13 +44,3 @@ function mapImport(path, {
         roles,
     }
 }
-
-function spaceType(requirePath) {
-    return requirePath.replace(/^components[/]spaces[/]/, '').replace(/(?:[/]|[.]js)$/, '')
-}
-
-export default req.keys()
-    .filter(r => r !== 'components/spaces/index.js')
-    .reduce((spaces, r) => Object.assign(spaces, {
-        [spaceType(r)]: mapImport(r, req(r)),
-    }), {})

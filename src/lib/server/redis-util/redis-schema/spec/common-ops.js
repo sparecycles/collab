@@ -26,6 +26,7 @@ export const CommonOps = createOps('CommonOps', {}, {
         const { _parent: parent, _key: key } = this
 
         if (isContainerInstance(parent)) {
+            parent.$watch()
             parent.$add(key, ...this._itemArgs)
         }
 
