@@ -201,9 +201,25 @@ function UserAdmin() {
     return (
         <Flex direction={'column'}>
             { Object.entries(allUsers || {}).sort()
-                .map(([user, { username }]) => (
+                .map(([user, { username, roles }]) => (
                     <Well key={user} position='relative'>
-                        {username}
+                        <Flex direction={'column'}>
+                            <View flex>
+                                {username}
+                            </View>
+                            <Flex direction={'row'}>
+                                { ['admin', 'voter'].map(role => (
+                                    <Field key={`role-${role}`} label={role} labelPosition='side'>
+                                        <Switch defaultSelected={roles.includes(role)}
+                                            onChange={(selected) => {
+                                                fetch(`/api/s/${space}/users/${user}/roles/${role}`, {
+                                                    method: selected ? 'post' : 'delete',
+                                                })
+                                            }} />
+                                    </Field>
+                                )) }
+                            </Flex>
+                        </Flex>
                         <ClearButton position={'absolute'} top={'-7px'} right={'-7px'} onPress={deleteUser(user)} />
                     </Well>
                 ))

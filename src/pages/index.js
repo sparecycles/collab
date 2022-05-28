@@ -66,7 +66,7 @@ export async function getServerSideProps({ req, res }) {
 
         try {
             await RedisContext.isolated(async () => {
-                commonSchema.collab.spaces(space).$watch()
+                await commonSchema.collab.spaces(space).$watch()
 
                 const type = await commonSchema.collab.spaces(space).$get('type')
                 if (type) {

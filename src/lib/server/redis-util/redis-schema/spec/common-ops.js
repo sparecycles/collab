@@ -1,4 +1,4 @@
-import { contextRedisClient } from 'lib/server/redis-util/redis-context'
+import RedisContext, { contextRedisClient } from 'lib/server/redis-util/redis-context'
 import { createOps, isContainerInstance } from './spec-core'
 
 export const CommonOps = createOps('CommonOps', {}, {
@@ -26,8 +26,10 @@ export const CommonOps = createOps('CommonOps', {}, {
         const { _parent: parent, _key: key } = this
 
         if (isContainerInstance(parent)) {
-            parent.$watch()
-            parent.$add(key, ...this._itemArgs)
+            RedisContext.multi(() => {
+                parent.$watch()
+                parent.$add(key, ...this._itemArgs)
+            }).exec()
         }
 
         parent?.$$addToContainer?.()

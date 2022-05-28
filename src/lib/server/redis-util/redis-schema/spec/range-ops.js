@@ -9,7 +9,7 @@ export const RangeOps = createOps('RangeOps', { extends: ContainerOps }, {
     },
     $add(key) {
         return RedisContext.multi(async () => {
-            this.$watch()
+            await this.$watch()
             if (await this.$pos(key) === null) {
                 return contextRedisClient('w').rPush(this.$path(), key)
             }
