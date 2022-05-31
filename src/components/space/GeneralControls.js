@@ -186,7 +186,7 @@ function DeleteRoomDialog() {
                 Delete the room entirely.
             </Content>
             <ButtonGroup>
-                <Button variant='cta' onPress={async () => {
+                <Button variant='primary' onPress={async () => {
                     const response = await fetch(`/api/s/${space}`, { method: 'DELETE' })
                     if (response.status >= 200 && response.status < 300) {
                         window.location = '/?space-deleted'

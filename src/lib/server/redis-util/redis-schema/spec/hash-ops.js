@@ -15,4 +15,11 @@ export const HashOps = createOps('HashOps', { isContainer: false, extends: Commo
         }
         return contextRedisClient('r').hGet(this.$path(), key)
     },
+    async $rem(...keys) {
+        if (keys.length === 0) {
+            return
+        }
+
+        return contextRedisClient('r').hDel(this.$path(), keys)
+    },
 })

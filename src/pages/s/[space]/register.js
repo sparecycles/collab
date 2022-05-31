@@ -57,13 +57,15 @@ export async function getServerSideProps({ req, res, params: { space } }) {
             } else {
                 user = crypto.randomUUID()
 
-                const { roles } = spaces[type]
-                const initialRoles = session === creatorSession && roles.creator || roles.user || []
+                const { initialRoles } = spaces[type]
+                const userRoles = session === creatorSession && initialRoles?.creator || initialRoles?.user || []
 
                 await RedisContext.multi(() => {
                     commonSchema.collab.spaces(space).sessions(session).$set({ user })
                     commonSchema.collab.spaces(space).users(user).$set({ username })
-                    commonSchema.collab.spaces(space).users(user).roles.$add(initialRoles)
+                    if (userRoles.length > 0) {
+                        commonSchema.collab.spaces(space).users(user).roles.$add(userRoles)
+                    }
                 })
             }
 

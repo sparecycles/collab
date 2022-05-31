@@ -18,9 +18,10 @@ import {
     Dialog,
     useDialogContainer,
     ButtonGroup,
+    Picker,
+    Item,
 } from '@adobe/react-spectrum'
 import { useLayoutEffect } from '@react-aria/utils'
-import { ClearButton } from '@react-spectrum/button'
 import { Field } from '@react-spectrum/label'
 import { useDeleteListItemAction, useEditListItemFormSubmit } from 'lib/client/data/util/list-data'
 import { useKeyMapping } from 'lib/client/data/util/key-mapping-context'
@@ -41,7 +42,7 @@ export const choice = {
     order: 0,
 }
 
-export const roles = {
+export const initialRoles = {
     user: ['voter'],
     creator: ['voter', 'admin'],
 }
@@ -144,17 +145,36 @@ export const api = {
         /** @type {import('lib/common/spaces').ApiMap<{ context: { user: string, roles: Set<string> } }>} */
         '[story]': {
             vote: {
+                reveal: {
+                    $inherited: requireRoleContext('adminRole'),
+                    async $put({ query: { space, story } }, res) {
+                        await voterSchema.collab.spaces(space).stories(story).$set({ revealed: true })
+                        return res.json(await voterSchema.collab.spaces(space).stories(story).$get())
+                    },
+                    async $delete({ query: { space, story } }, res) {
+                        await voterSchema.collab.spaces(space).stories(story).$rem('revealed')
+                        return res.json(await voterSchema.collab.spaces(space).stories(story).$get())
+                    },
+                },
                 async $put({ body, context: { user }, query: { space, story } }, res) {
                     const { vote } = body
                     voterSchema.collab.spaces(space).users(user).votes.$set({ [story]: vote })
                     res.status(204).end()
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
+                    const revealedPromise = voterSchema.collab.spaces(space).stories(story).$get('revealed')
                     const allUserIds = [...await voterSchema.collab.spaces(space).users.$get()]
-                    const otherUsers = allUserIds.filter(id => id !== user)
+                    const votingUsers = (await Promise.all(
+                        allUserIds.map(
+                            async user => await voterSchema.collab.spaces(space).users(user).roles.$has('voter')
+                            && user
+                        )
+                    )).filter(Boolean)
+
+                    const otherUsers = votingUsers.filter(id => id !== user)
 
                     let [vote, otherVotes] = await Promise.all([
-                        voterSchema.collab.spaces(space).users(user).votes.$get(story),
+                        votingUsers.includes(user) && voterSchema.collab.spaces(space).users(user).votes.$get(story),
                         Promise.all(otherUsers.map(async other =>
                             (await voterSchema.collab.spaces(space).users(other).votes.$get(story))
                         )),
@@ -162,7 +182,15 @@ export const api = {
 
                     otherVotes = otherVotes.sort()
 
-                    res.status(200).json({ vote, otherVotes })
+                    const count = [vote, ...otherVotes].filter(Boolean).length
+                    const total = votingUsers.length
+
+                    const revealed = Boolean(await revealedPromise)
+                    if (!revealed) {
+                        otherVotes = []
+                    }
+
+                    res.status(200).json({ vote, otherVotes, count, total, revealed })
                 },
             },
         },
@@ -177,18 +205,16 @@ export async function getServerSideProps({ params: { space } }) {
     } }
 }
 
-function useDeleteUser(onComplete = Function.prototype) {
+function useDeleteUser() {
     const { space } = useContext(SpaceContext)
-    return user => async () => {
-        try {
-            await fetch(`/api/s/${space}/users/${user}`, { method: 'delete' })
-        } finally {
-            onComplete()
-        }
-    }
+    return user => fetch(`/api/s/${space}/users/${user}`, { method: 'delete' })
 }
 
-function UserAdmin() {
+UserAdmin.propTypes = {
+    user: PropTypes.string.isRequired,
+}
+
+function UserAdmin({ user: selfUser, ...props }) {
     const { space } = useContext(SpaceContext)
 
     const {
@@ -196,42 +222,89 @@ function UserAdmin() {
         mutate,
     } = useSWR('all-users', async () => (await fetch(`/api/s/${space}/users`)).json())
 
-    const deleteUser = useDeleteUser(mutate)
+    const deleteUser = useDeleteUser()
+
+    const [user, setUser] = useState(null)
+
+    const lastUser = useRef()
+
+    lastUser.current = user || lastUser.current
 
     return (
-        <Flex direction={'column'}>
-            { Object.entries(allUsers || {}).sort()
-                .map(([user, { username, roles }]) => (
-                    <Well key={user} position='relative'>
-                        <Flex direction={'column'}>
-                            <View flex>
-                                {username}
-                            </View>
-                            <Flex direction={'row'}>
+        <DialogTrigger isOpen={user !== null} isDismissable>
+            <Picker label={'Manage a user'} placeholder={'select a user'}
+                selectedKey={user}
+                onSelectionChange={setUser}
+                {...props}>
+                { Object.entries(allUsers || {}).sort()
+                    .map(([user, { username, roles }]) => (
+                        <Item key={user} value={user}>
+                            <Text>{username}</Text>
+                            <Text slot={'description'}>{roles.join(', ')}</Text>
+                        </Item>
+                    ))
+                }
+            </Picker>
+            <Dialog onDismiss={() => setUser(null)}>
+                <Heading>
+                    Admin user - {allUsers?.[lastUser.current]?.username}?
+                </Heading>
+                <Content>
+                    <Flex direction='row' alignItems={'end'}>
+                        <ButtonGroup flex align='center'>
+                            <ActionButton type='secondary' onPress={() => {
+                                mutate(() => deleteUser(user), {
+                                    populateCache: false,
+                                    rollbackOnError: true,
+                                    revalidate: true,
+                                    optimisticData: ({ [user]: _selected, ...users }) => users,
+                                })
+                                setUser(null)
+                            }}>Kick User</ActionButton>
+                        </ButtonGroup>
+                        <Well>
+                            Roles
+                            <Flex direction={'column'}>
                                 { ['admin', 'voter'].map(role => (
-                                    <Field key={`role-${role}`} label={role} labelPosition='side'>
-                                        <Switch defaultSelected={roles.includes(role)}
-                                            onChange={(selected) => {
-                                                fetch(`/api/s/${space}/users/${user}/roles/${role}`, {
-                                                    method: selected ? 'post' : 'delete',
-                                                })
-                                            }} />
-                                    </Field>
+                                    <Switch key={`role-${role}`}
+                                        defaultSelected={allUsers?.[user]?.roles.includes(role)}
+                                        isSelected={allUsers?.[lastUser.current]?.roles.includes(role)}
+                                        isDisabled={lastUser.current === selfUser && role === 'admin'}
+                                        onChange={(selected) => {
+                                            mutate(() => fetch(`/api/s/${space}/users/${user}/roles/${role}`, {
+                                                method: selected ? 'post' : 'delete',
+                                            }), {
+                                                populateCache: false,
+                                                optimisticData: allUsers => ({
+                                                    ...allUsers,
+                                                    [user]: {
+                                                        ...allUsers[user],
+                                                        roles: selected
+                                                            ? [...allUsers[user].roles, role]
+                                                            : allUsers[user].roles.filter(_role => role !== _role),
+                                                    },
+                                                }),
+                                            })
+                                        }}
+                                    >
+                                        {role}
+                                    </Switch>
                                 )) }
                             </Flex>
-                        </Flex>
-                        <ClearButton position={'absolute'} top={'-7px'} right={'-7px'} onPress={deleteUser(user)} />
-                    </Well>
-                ))
-            }
-        </Flex>
+                        </Well>
+                    </Flex>
+                </Content>
+            </Dialog>
+        </DialogTrigger>
     )
 }
 
 Voter.propTypes = {
     space: PropTypes.string.isRequired,
+    user: PropTypes.string.isRequired,
     roles: PropTypes.instanceOf(Set),
     userinfo: PropTypes.shape({
+        user: PropTypes.string.isRequired,
         username: PropTypes.string.isRequired,
     }),
     stories: PropTypes.arrayOf(PropTypes.shape({
@@ -241,7 +314,7 @@ Voter.propTypes = {
 
 const ShowYourVoteContext = createContext()
 
-export default function Voter({ space, roles, stories: initialStories, userinfo: { username } }) {
+export default function Voter({ space, roles, stories: initialStories, user, userinfo: { username } }) {
     let { data: stories } = useSWR('stories', async () => (await fetch(`/api/s/${space}/stories`)).json(), {
         fallbackData: initialStories,
         refreshInterval: 1000,
@@ -263,18 +336,20 @@ export default function Voter({ space, roles, stories: initialStories, userinfo:
                     gap={'size-300'}
                 >
                     <Heading level={1}><Text>Groom Stories {username}</Text></Heading>
-                    { roles.has('admin') ? <UserAdmin/> : null }
-                    <View position={'relative'} width='100vw' height={'single-line-height'}>
-                        <Field label='show votes' labelPosition='side'
-                            position={'absolute'} top='size-50' right='size-50'
-                            width='size-1600'>
-                            <Switch defaultSelected={showYourVotes} onChange={setShowYourVotes} value={showYourVotes}/>
-                        </Field>
-                    </View>
+                    <Flex direction={'row'} alignItems='end' gap='size-115'>
+                        { roles.has('admin') ? <UserAdmin user={user} minWidth='size-2000' /> : null }
+                        <View flex />
+                        { roles.has('voter') ? (
+                            <Switch defaultSelected={showYourVotes} onChange={setShowYourVotes}
+                                value={showYourVotes} minWidth={'size-1600'}>
+                                Show votes
+                            </Switch>
+                        ) : null }
+                    </Flex>
                     { stories?.map(({ id, ...props }) => (
                         <StoryItem key={keyMapping(id)} story={id} {...props} />
                     )) }
-                    <StoryEditItem autofocus />
+                    <StoryEditItem autoFocus />
                 </Flex>
             </ShowYourVoteContext.Provider>
         </Fragment>
@@ -380,24 +455,28 @@ StoryItem.propTypes = {
     title: PropTypes.string.isRequired,
 }
 function StoryItem({ story, title }) {
-    const { space } = useContext(SpaceContext)
+    const { space, roles } = useContext(SpaceContext)
 
-    const { data: { vote, otherVotes }, mutate } = useSWR(`stories:${story}:vote`, async () => {
+    const { data: {
+        vote,
+        otherVotes,
+        revealed,
+        count: votedCount,
+        total: totalVoters,
+    }, mutate } = useSWR(`stories:${story}:vote`, async () => {
         const response = await fetch(`/api/s/${space}/stories/${story}/vote`)
-        const { vote, otherVotes } = await response.json()
-        return { vote, otherVotes }
-    }, { refreshInterval: 1000, fallbackData: { vote: null, otherVotes: [] } })
+        const { vote, otherVotes, revealed, count, total } = await response.json()
+        return { vote, otherVotes, revealed, count, total }
+    }, { refreshInterval: 1000, fallbackData: { vote: null, otherVotes: [], count: 0, total: 0 } })
 
     const showYourVotes = useContext(ShowYourVoteContext)
-
-    const totalVoters = otherVotes.length + 1
 
     const voted = [vote, ...otherVotes].filter(Boolean)
 
     const voteCounts = voted.reduce((counts, vote) => Object.assign(counts, {
         [vote]: (counts[vote] || 0) + 1,
         max: Math.max((counts[vote] || 0) + 1, counts.max),
-    }), { max: 1, totalVoters })
+    }), { max: 1 })
 
     return (
         <Well position={'relative'} role='region'>
@@ -418,10 +497,11 @@ function StoryItem({ story, title }) {
                             UNSAFE_style={{
                                 transition: 'min-height 1s ease',
                             }}
-                            minHeight={`${(voteCounts[ivote] || 0) * 40 / voteCounts.totalVoters + 1}px`} >
+                            minHeight={`${(voteCounts[ivote] || 0) * 35 / Math.max(totalVoters, 1) + 1}px`} >
                             <View position={'absolute'} bottom='size-0'>
                                 <ToggleButton position={'absolute'}
                                     isSelected={showYourVotes && vote === String(ivote)}
+                                    isDisabled={!roles.has('voter')}
                                     onPress={async () => {
                                         mutate(({ ...data }) => ({ ...data, vote: ivote }), false)
                                         await fetch(`/api/s/${space}/stories/${story}/vote`, {
@@ -438,7 +518,25 @@ function StoryItem({ story, title }) {
                             </View>
                         </View>
                     ))}
-                    <View>{voted.length}/{totalVoters}</View>
+                    <View flex/>
+                    { roles.has('admin') ? (
+                        <Switch
+                            onChange={value => mutate(async () => {
+                                return fetch(`/api/s/${space}/stories/${story}/vote/reveal`, {
+                                    method: value ? 'put' : 'delete',
+                                })
+                            }, {
+                                populateCache: false,
+                                rollbackOnError: true,
+                                optimisticData: data => ({
+                                    ...data,
+                                    revealed: value,
+                                }),
+                            })}
+                            isSelected={revealed}
+                            defaultSelected={revealed}
+                        >Reveal Votes? {votedCount}/{totalVoters} voted</Switch>
+                    ) : null }
                 </Flex>
             </Content>
             <DeleteStoryButton story={story} title={title} position={'absolute'} top={'size-0'} right={'size-0'} />
@@ -448,15 +546,11 @@ function StoryItem({ story, title }) {
 }
 
 StoryEditItem.propTypes = {
-    story: PropTypes.string,
-    autofocus: PropTypes.bool,
-    autocommit: PropTypes.bool,
     afterMutate: PropTypes.func,
     title: PropTypes.string,
 }
 
 function StoryEditItem({
-    autofocus,
     afterMutate = Function.prototype,
     title: initialTitle = '',
     ...props
@@ -464,8 +558,6 @@ function StoryEditItem({
     const [title, setTitle] = useState(initialTitle)
     const form = useRef()
     const field = useRef()
-
-    useLayoutEffect(() => autofocus && field.current?.focus?.())
 
     const { onSubmit } = useEditListItemFormSubmit('stories', {
         validate({ title }) {

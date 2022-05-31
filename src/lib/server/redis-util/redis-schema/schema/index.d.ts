@@ -32,6 +32,7 @@ interface KeyOps extends CommonOps {
 interface HashOps extends CommonOps {
     $set(key: string, value: string): Promise<void>
     $get(key: string): Promise<string>
+    $rem(...keys: string[]): Promise<string>
     $get(): Promise<{ [_:string]: string }>
 }
 

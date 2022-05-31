@@ -20,7 +20,7 @@ function mapImport(type, {
     getServerSideProps,
     api = {},
     choice = {},
-    roles = {
+    initialRoles = {
         user: ['user'],
         creator: ['user', 'creator'],
     },
@@ -31,7 +31,7 @@ function mapImport(type, {
     }
 
     choice = Object.assign({
-        icon: <Question />,
+        icon: Question,
         text: type,
         description: `Create a ${type} space`,
     }, choice)
@@ -41,6 +41,6 @@ function mapImport(type, {
         getServerSideProps,
         api,
         choice,
-        roles,
+        initialRoles,
     }
 }
