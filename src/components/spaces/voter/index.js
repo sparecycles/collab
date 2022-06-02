@@ -22,7 +22,6 @@ import {
     Item,
 } from '@adobe/react-spectrum'
 import { useLayoutEffect } from '@react-aria/utils'
-import { Field } from '@react-spectrum/label'
 import { useDeleteListItemAction, useEditListItemFormSubmit } from 'lib/client/data/util/list-data'
 import { useKeyMapping } from 'lib/client/data/util/key-mapping-context'
 import SpaceContext from 'components/space/SpaceContext'
@@ -149,20 +148,43 @@ export const api = {
                     $inherited: requireRoleContext('adminRole'),
                     async $put({ query: { space, story } }, res) {
                         await voterSchema.collab.spaces(space).stories(story).$set({ revealed: true })
-                        return res.json(await voterSchema.collab.spaces(space).stories(story).$get())
+
+                        const allUserIds = [...await voterSchema.collab.spaces(space).users.$get()]
+                        const votingUsers = (await Promise.all(
+                            allUserIds.map(
+                                async user => await voterSchema.collab.spaces(space).users(user).roles.$has('voter')
+                                && user
+                            )
+                        )).filter(Boolean)
+
+                        let voteSnapshot = await Promise.all(votingUsers.map(other =>
+                            voterSchema.collab.spaces(space).users(other).votes.$get(story)
+                        ))
+
+                        voterSchema.collab.spaces(space).stories(story).$set({
+                            voteSnapshot: voteSnapshot.sort().join(','),
+                        })
+
+                        return res.end()
                     },
                     async $delete({ query: { space, story } }, res) {
                         await voterSchema.collab.spaces(space).stories(story).$rem('revealed')
-                        return res.json(await voterSchema.collab.spaces(space).stories(story).$get())
+                        return res.end()
                     },
                 },
                 async $put({ body, context: { user }, query: { space, story } }, res) {
                     const { vote } = body
+                    if (await voterSchema.collab.spaces(space).stories(story).$get('revealed')) {
+                        return res.status(409).end()
+                    }
                     voterSchema.collab.spaces(space).users(user).votes.$set({ [story]: vote })
                     res.status(204).end()
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
-                    const revealedPromise = voterSchema.collab.spaces(space).stories(story).$get('revealed')
+                    const storyInfoPromise = voterSchema.collab.spaces(space).stories(story).$get()
+                    const vote = await voterSchema.collab.spaces(space).users(user).votes.$get(story)
+
+                    const { revealed, voteSnapshot } = await storyInfoPromise
                     const allUserIds = [...await voterSchema.collab.spaces(space).users.$get()]
                     const votingUsers = (await Promise.all(
                         allUserIds.map(
@@ -171,26 +193,18 @@ export const api = {
                         )
                     )).filter(Boolean)
 
-                    const otherUsers = votingUsers.filter(id => id !== user)
-
-                    let [vote, otherVotes] = await Promise.all([
-                        votingUsers.includes(user) && voterSchema.collab.spaces(space).users(user).votes.$get(story),
-                        Promise.all(otherUsers.map(async other =>
-                            (await voterSchema.collab.spaces(space).users(other).votes.$get(story))
-                        )),
-                    ])
-
-                    otherVotes = otherVotes.sort()
-
-                    const count = [vote, ...otherVotes].filter(Boolean).length
+                    const count = (await Promise.all(votingUsers.map(other =>
+                        voterSchema.collab.spaces(space).users(other).votes.$get(story)
+                    ))).filter(Boolean).length
                     const total = votingUsers.length
 
-                    const revealed = Boolean(await revealedPromise)
-                    if (!revealed) {
-                        otherVotes = []
-                    }
-
-                    res.status(200).json({ vote, otherVotes, count, total, revealed })
+                    res.status(200).json({
+                        vote,
+                        voteSnapshot: voteSnapshot?.split(',') || [],
+                        count,
+                        total,
+                        revealed: Boolean(revealed),
+                    })
                 },
             },
         },
@@ -459,24 +473,28 @@ function StoryItem({ story, title }) {
 
     const { data: {
         vote,
-        otherVotes,
+        voteSnapshot,
         revealed,
         count: votedCount,
         total: totalVoters,
     }, mutate } = useSWR(`stories:${story}:vote`, async () => {
         const response = await fetch(`/api/s/${space}/stories/${story}/vote`)
-        const { vote, otherVotes, revealed, count, total } = await response.json()
-        return { vote, otherVotes, revealed, count, total }
-    }, { refreshInterval: 1000, fallbackData: { vote: null, otherVotes: [], count: 0, total: 0 } })
+        return await response.json()
+    }, { refreshInterval: 1000, fallbackData: { vote: null, voteSnapshot: [], count: 0, total: 0 } })
 
     const showYourVotes = useContext(ShowYourVoteContext)
 
-    const voted = [vote, ...otherVotes].filter(Boolean)
-
-    const voteCounts = voted.reduce((counts, vote) => Object.assign(counts, {
+    const voteCounts = voteSnapshot.reduce((counts, vote) => Object.assign(counts, {
         [vote]: (counts[vote] || 0) + 1,
         max: Math.max((counts[vote] || 0) + 1, counts.max),
     }), { max: 1 })
+
+    const voteHeightMaxPx = 40
+    const voteHeightScalePx = 37
+
+    function voteHeightPx(ivote) {
+        return (voteCounts[ivote] || 0) * voteHeightScalePx / Math.max(totalVoters, 1) + 1
+    }
 
     return (
         <Well position={'relative'} role='region'>
@@ -488,20 +506,20 @@ function StoryItem({ story, title }) {
                     direction={'row'}
                     gap={'size-100'}
                     alignItems={'baseline'}>
-                    <View width={'size-0'} height={'40px'} />
+                    <View width={'size-0'} height={`${voteHeightMaxPx}px`} />
                     { [...storySizes, 'abstain'].map(ivote => (
                         <View key={`vote-count-${ivote}`}
                             position='relative'
-                            minWidth={'size-500'}
+                            minWidth={'size-600'}
                             backgroundColor={'gray-500'}
                             UNSAFE_style={{
                                 transition: 'min-height 1s ease',
                             }}
-                            minHeight={`${(voteCounts[ivote] || 0) * 35 / Math.max(totalVoters, 1) + 1}px`} >
+                            minHeight={`${voteHeightPx(ivote)}px`} >
                             <View position={'absolute'} bottom='size-0'>
                                 <ToggleButton position={'absolute'}
                                     isSelected={showYourVotes && vote === String(ivote)}
-                                    isDisabled={!roles.has('voter')}
+                                    isDisabled={!roles.has('voter') || revealed}
                                     onPress={async () => {
                                         mutate(({ ...data }) => ({ ...data, vote: ivote }), false)
                                         await fetch(`/api/s/${space}/stories/${story}/vote`, {
@@ -511,32 +529,34 @@ function StoryItem({ story, title }) {
                                         mutate()
                                     }}
                                     type='button'
-                                    height={'size-500'}
-                                    width={'size-500'}
+                                    height={'size-600'}
+                                    width={'size-600'}
                                     top={'size-50'}
                                 >{ivote === 'abstain' ? '?' : ivote}</ToggleButton>
                             </View>
                         </View>
                     ))}
                     <View flex/>
-                    { roles.has('admin') ? (
-                        <Switch
-                            onChange={value => mutate(async () => {
-                                return fetch(`/api/s/${space}/stories/${story}/vote/reveal`, {
-                                    method: value ? 'put' : 'delete',
-                                })
-                            }, {
-                                populateCache: false,
-                                rollbackOnError: true,
-                                optimisticData: data => ({
-                                    ...data,
-                                    revealed: value,
-                                }),
-                            })}
-                            isSelected={revealed}
-                            defaultSelected={revealed}
-                        >Reveal Votes? {votedCount}/{totalVoters} voted</Switch>
-                    ) : null }
+                    <Flex direction='column'>
+                        { roles.has('admin') ? (<>
+                            <Switch
+                                onChange={value => mutate(async () => {
+                                    return fetch(`/api/s/${space}/stories/${story}/vote/reveal`, {
+                                        method: value ? 'put' : 'delete',
+                                    })
+                                }, {
+                                    populateCache: false,
+                                    rollbackOnError: true,
+                                    optimisticData: data => ({
+                                        ...data,
+                                        revealed: value,
+                                    }),
+                                })}
+                                isSelected={revealed}
+                            >Reveal and lock votes?</Switch>
+                        </>) : null }
+                        <View>{votedCount}/{totalVoters} voted</View>
+                    </Flex>
                 </Flex>
             </Content>
             <DeleteStoryButton story={story} title={title} position={'absolute'} top={'size-0'} right={'size-0'} />
