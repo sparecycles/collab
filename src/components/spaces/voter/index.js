@@ -313,20 +313,19 @@ function UserAdmin({ user: selfUser, ...props }) {
     )
 }
 
+const HideMyVoteContext = createContext()
+
 Voter.propTypes = {
     space: PropTypes.string.isRequired,
     user: PropTypes.string.isRequired,
     roles: PropTypes.instanceOf(Set),
     userinfo: PropTypes.shape({
-        user: PropTypes.string.isRequired,
         username: PropTypes.string.isRequired,
     }),
     stories: PropTypes.arrayOf(PropTypes.shape({
         id: PropTypes.string,
     })).isRequired,
 }
-
-const ShowYourVoteContext = createContext()
 
 export default function Voter({ space, roles, stories: initialStories, user, userinfo: { username } }) {
     let { data: stories } = useSWR('stories', async () => (await fetch(`/api/s/${space}/stories`)).json(), {
@@ -336,11 +335,11 @@ export default function Voter({ space, roles, stories: initialStories, user, use
 
     const keyMapping = useKeyMapping()
 
-    const [showYourVotes, setShowYourVotes] = useState(true)
+    const [hideMyVotes, setHideMyVotes] = useState(false)
 
     return (
         <Fragment>
-            <ShowYourVoteContext.Provider value={showYourVotes}>
+            <HideMyVoteContext.Provider value={hideMyVotes}>
                 <Flex
                     position={'relative'}
                     direction={'column'}
@@ -354,9 +353,9 @@ export default function Voter({ space, roles, stories: initialStories, user, use
                         { roles.has('admin') ? <UserAdmin user={user} minWidth='size-2000' /> : null }
                         <View flex />
                         { roles.has('voter') ? (
-                            <Switch defaultSelected={showYourVotes} onChange={setShowYourVotes}
-                                value={showYourVotes} minWidth={'size-1600'}>
-                                Show votes
+                            <Switch defaultSelected={hideMyVotes} onChange={setHideMyVotes}
+                                value={hideMyVotes} minWidth={'size-1600'}>
+                                Hide my votes
                             </Switch>
                         ) : null }
                     </Flex>
@@ -365,7 +364,7 @@ export default function Voter({ space, roles, stories: initialStories, user, use
                     )) }
                     <StoryEditItem autoFocus />
                 </Flex>
-            </ShowYourVoteContext.Provider>
+            </HideMyVoteContext.Provider>
         </Fragment>
     )
 }
@@ -482,7 +481,7 @@ function StoryItem({ story, title }) {
         return await response.json()
     }, { refreshInterval: 1000, fallbackData: { vote: null, voteSnapshot: [], count: 0, total: 0 } })
 
-    const showYourVotes = useContext(ShowYourVoteContext)
+    const hideMyVotes = useContext(HideMyVoteContext)
 
     const voteCounts = voteSnapshot.reduce((counts, vote) => Object.assign(counts, {
         [vote]: (counts[vote] || 0) + 1,
@@ -518,7 +517,7 @@ function StoryItem({ story, title }) {
                             minHeight={`${voteHeightPx(ivote)}px`} >
                             <View position={'absolute'} bottom='size-0'>
                                 <ToggleButton position={'absolute'}
-                                    isSelected={showYourVotes && vote === String(ivote)}
+                                    isSelected={vote === String(ivote) && !hideMyVotes}
                                     isDisabled={!roles.has('voter') || revealed}
                                     onPress={async () => {
                                         mutate(({ ...data }) => ({ ...data, vote: ivote }), false)
