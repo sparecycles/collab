@@ -9,7 +9,7 @@ import commonSchema from 'lib/server/data/schemas/common-schema'
 import GeneralControls from 'components/space/GeneralControls'
 
 /** @type {import('next').GetServerSideProps} */
-export async function getServerSideProps({ req, res, params: { space }, ...other }) {
+export async function getServerSideProps({ req, res, params: { space } }) {
     const cookies = new Cookies(req, res)
 
     const { type, ...config } = await commonSchema.collab.spaces(space).$get()
@@ -37,7 +37,7 @@ export async function getServerSideProps({ req, res, params: { space }, ...other
     }
 
     const { props = {} } = await (spaces[type].getServerSideProps || Function.prototype)({
-        req, res, ...other, params: { space, session, user, roles, config },
+        req, res, params: { space, session, user, config },
     }) || {}
 
     return {

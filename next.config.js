@@ -37,14 +37,13 @@ const nextConfig = {
 const transpiledModules = nextTranspileModules([
   'swr',
   ...[
-    '@adobe/react-spectrum*',  
+    '@adobe/react-spectrum*',
     '@react-aria/*',
     '@react-spectrum/*',
     '@react-stately/*',
     '@react-types/*',
     '@spectrum-aria/*',
-    '@spectrum-icons/ui',
-    '@spectrum-icons/workflow',
+    '@spectrum-icons/*',
   ].flatMap(
     spec => glob.sync(`${spec}`, { cwd: 'node_modules/' })
   )
