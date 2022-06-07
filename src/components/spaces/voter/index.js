@@ -600,7 +600,7 @@ function StoryEditItem({
                     value={title}
                     {...props}
                 />
-                <Button variant='primary' isQuiet>{'Add Story'}</Button>
+                <Button type='submit' variant='primary' isQuiet>{'Add Story'}</Button>
             </Flex>
         </Form>
     )
