@@ -3,11 +3,13 @@
     "shared-node-browser": true
   },
   "ignorePatterns": [ "**/*.d.ts", "node_modules/**" ],
+  "plugins": [ "ordered-imports" ],
   "extends": [
     "next/core-web-vitals",
     "react",
     "plugin:@typescript-eslint/eslint-recommended",
-    "plugin:@typescript-eslint/recommended"
+    "plugin:@typescript-eslint/recommended",
+    "plugin:ordered-imports/recommended"
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
@@ -48,7 +50,24 @@
       "ignoreRestSiblings": true,
       "destructuredArrayIgnorePattern": "^_",
       "caughtErrorsIgnorePattern": "^ignore"
-    } ]
+    } ],
+    "ordered-imports/ordered-imports": [
+      "error",
+      {
+        "symbols-first": true,
+        "declaration-ordering": ["type", {
+          "ordering": ["side-effect", "default", "namespace", "destructured"],
+          "secondaryOrdering": ["name", "lowercase-last"]
+        }],
+        "specifier-ordering": "lowercase-last",
+        "group-ordering": [
+          { "name": "third-party", "match": ".*", "order": 10 },
+          { "name": "scoped-imports", "match": "^@", "order": 20 },
+          { "name": "parent directories", "match": "^\\.\\.", "order": 30 },
+          { "name": "current directory", "match": "^\\.", "order": 40 }
+        ]
+      }
+    ]
   },
   "globals": {
     "SubmitEvent": false,

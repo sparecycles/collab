@@ -1,6 +1,5 @@
 import { createContext, Fragment, useContext, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { unwrapDOMRef } from '@react-spectrum/utils'
 import {
     ActionButton,
     Content,
@@ -18,10 +17,7 @@ import {
     Dialog,
     useDialogContainer,
     ButtonGroup,
-    Picker,
-    Item,
 } from '@adobe/react-spectrum'
-import { useLayoutEffect } from '@react-aria/utils'
 import { useDeleteListItemAction, useEditListItemFormSubmit } from 'lib/client/data/util/list-data'
 import { useKeyMapping } from 'lib/client/data/util/key-mapping-context'
 import SpaceContext from 'components/space/SpaceContext'
@@ -32,6 +28,9 @@ import schema, { mergeSchemas } from 'lib/server/redis-util/redis-schema'
 import Delete from '@spectrum-icons/workflow/Delete'
 import GraphBarVertical from '@spectrum-icons/workflow/GraphBarVertical'
 import Edit from '@spectrum-icons/workflow/Edit'
+import AddStoryForm from './components/AddStoryForm'
+import UserAdmin from './components/UserAdmin'
+import EditStoryDialog from './components/EditStoryDialog'
 
 /** @type {import('lib/common/spaces').SpaceChoice} */
 export const choice = {
@@ -219,100 +218,6 @@ export async function getServerSideProps({ params: { space } }) {
     } }
 }
 
-function useDeleteUser() {
-    const { space } = useContext(SpaceContext)
-    return user => fetch(`/api/s/${space}/users/${user}`, { method: 'delete' })
-}
-
-UserAdmin.propTypes = {
-    user: PropTypes.string.isRequired,
-}
-
-function UserAdmin({ user: selfUser, ...props }) {
-    const { space } = useContext(SpaceContext)
-
-    const {
-        data: allUsers,
-        mutate,
-    } = useSWR('all-users', async () => (await fetch(`/api/s/${space}/users`)).json())
-
-    const deleteUser = useDeleteUser()
-
-    const [user, setUser] = useState(null)
-
-    const lastUser = useRef()
-
-    lastUser.current = user || lastUser.current
-
-    return (
-        <DialogTrigger isOpen={user !== null} isDismissable>
-            <Picker label={'Manage a user'} placeholder={'select a user'}
-                selectedKey={user}
-                onSelectionChange={setUser}
-                {...props}>
-                { Object.entries(allUsers || {}).sort()
-                    .map(([user, { username, roles }]) => (
-                        <Item key={user} value={user}>
-                            <Text>{username}</Text>
-                            <Text slot={'description'}>{roles.join(', ')}</Text>
-                        </Item>
-                    ))
-                }
-            </Picker>
-            <Dialog onDismiss={() => setUser(null)}>
-                <Heading>
-                    Admin user - {allUsers?.[lastUser.current]?.username}?
-                </Heading>
-                <Content>
-                    <Flex direction='row' alignItems={'end'}>
-                        <ButtonGroup flex align='center'>
-                            <ActionButton type='secondary' onPress={() => {
-                                mutate(() => deleteUser(user), {
-                                    populateCache: false,
-                                    rollbackOnError: true,
-                                    revalidate: true,
-                                    optimisticData: ({ [user]: _selected, ...users }) => users,
-                                })
-                                setUser(null)
-                            }}>Kick User</ActionButton>
-                        </ButtonGroup>
-                        <Well>
-                            Roles
-                            <Flex direction={'column'}>
-                                { ['admin', 'voter'].map(role => (
-                                    <Switch key={`role-${role}`}
-                                        defaultSelected={allUsers?.[user]?.roles.includes(role)}
-                                        isSelected={allUsers?.[lastUser.current]?.roles.includes(role)}
-                                        isDisabled={lastUser.current === selfUser && role === 'admin'}
-                                        onChange={(selected) => {
-                                            mutate(() => fetch(`/api/s/${space}/users/${user}/roles/${role}`, {
-                                                method: selected ? 'post' : 'delete',
-                                            }), {
-                                                populateCache: false,
-                                                optimisticData: allUsers => ({
-                                                    ...allUsers,
-                                                    [user]: {
-                                                        ...allUsers[user],
-                                                        roles: selected
-                                                            ? [...allUsers[user].roles, role]
-                                                            : allUsers[user].roles.filter(_role => role !== _role),
-                                                    },
-                                                }),
-                                            })
-                                        }}
-                                    >
-                                        {role}
-                                    </Switch>
-                                )) }
-                            </Flex>
-                        </Well>
-                    </Flex>
-                </Content>
-            </Dialog>
-        </DialogTrigger>
-    )
-}
-
 const HideMyVoteContext = createContext()
 
 Voter.propTypes = {
@@ -362,60 +267,12 @@ export default function Voter({ space, roles, stories: initialStories, user, use
                     { stories?.map(({ id, ...props }) => (
                         <StoryItem key={keyMapping(id)} story={id} {...props} />
                     )) }
-                    <StoryEditItem autoFocus />
+                    <AddStoryForm autoFocus />
                 </Flex>
             </HideMyVoteContext.Provider>
         </Fragment>
     )
 }
-
-EditStoryDialog.propTypes = {
-    story: PropTypes.string.isRequired,
-    title: PropTypes.string.isRequired,
-}
-
-function EditStoryDialog({ story, title }) {
-    const { dismiss } = useDialogContainer()
-    const { onSubmit } = useEditListItemFormSubmit('stories', {
-        id: story,
-        validate({ title }) { return Boolean(title) },
-        afterMutate() { dismiss() },
-    })
-
-    const textfield = useRef()
-    const form = useRef()
-
-    useLayoutEffect(() => {
-        textfield?.current?.focus?.()
-    }, [textfield])
-
-    return (
-        <Dialog>
-            <Heading>Edit Story Title</Heading>
-            <Content>
-                <Form ref={form} onSubmit={(event) => {
-                    onSubmit(event)
-                    dismiss()
-                }}>
-                    <TextField ref={textfield} name={'title'} defaultValue={title} />
-                </Form>
-            </Content>
-            <ButtonGroup>
-                <Button variant='cta' onPress={event => fakeSubmit(event, form)}>Save</Button>
-                <Button variant='secondary' onPress={dismiss}>Cancel</Button>
-            </ButtonGroup>
-        </Dialog>
-    )
-}
-
-function fakeSubmit(event, formref) {
-    unwrapDOMRef(formref).current.dispatchEvent(new SubmitEvent('submit', {
-        submitter: event.target,
-        bubbles: true,
-        cancelable: true,
-    }))
-}
-
 EditStoryButton.propTypes = {
     story: PropTypes.string.isRequired,
     title: PropTypes.string.isRequired,
@@ -561,47 +418,5 @@ function StoryItem({ story, title }) {
             <DeleteStoryButton story={story} title={title} position={'absolute'} top={'size-0'} right={'size-0'} />
             <EditStoryButton story={story} title={title} position={'absolute'} top={'size-0'} left={'size-0'} />
         </Well>
-    )
-}
-
-StoryEditItem.propTypes = {
-    afterMutate: PropTypes.func,
-    title: PropTypes.string,
-}
-
-function StoryEditItem({
-    afterMutate = Function.prototype,
-    title: initialTitle = '',
-    ...props
-}) {
-    const [title, setTitle] = useState(initialTitle)
-    const form = useRef()
-    const field = useRef()
-
-    const { onSubmit } = useEditListItemFormSubmit('stories', {
-        validate({ title }) {
-            return Boolean(title)
-        },
-        afterMutate() {
-            setTitle('')
-            afterMutate()
-        },
-    })
-
-    return (
-        <Form ref={form} isQuiet onSubmit={onSubmit}>
-            <Flex direction={'row'}>
-                <TextField ref={field}
-                    flex
-                    aria-label={'Story Title'}
-                    description={'Add Story for Grooming'}
-                    name={'title'}
-                    onChange={setTitle}
-                    value={title}
-                    {...props}
-                />
-                <Button type='submit' variant='primary' isQuiet>{'Add Story'}</Button>
-            </Flex>
-        </Form>
     )
 }
