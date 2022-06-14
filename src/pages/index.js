@@ -1,31 +1,32 @@
-import { useEffect, useState } from 'react'
+import Cookies from 'cookies'
+import Head from 'next/head'
+import {
+    useEffect,
+    useState,
+} from 'react'
 import { WatchError } from 'redis'
-import crypto from 'lib/server/node/crypto'
+
 import {
     AlertDialog,
     Button,
     DialogTrigger,
+    Flex,
     Form,
     Item,
     Picker,
-    Text,
     Provider as SpectrumProvider,
+    Text,
     lightTheme,
-    Flex,
 } from '@adobe/react-spectrum'
 import UserGroup from '@spectrum-icons/workflow/UserGroup'
-import formParser from 'lib/server/form-parser'
-import Head from 'next/head'
-import Cookies from 'cookies'
-import spaces from 'lib/common/spaces'
-import { getSession } from 'lib/server/session'
-import PropTypes from 'lib/common/react-util/prop-types'
-import RedisContext from 'lib/server/redis-util/redis-context'
-import commonSchema from 'lib/server/data/schemas/common-schema'
 
-function spaceNameInvalid(space) {
-    return /[^a-z0-9_-]/i.test(space)
-}
+import PropTypes from 'lib/common/react-util/prop-types'
+import spaces from 'lib/common/spaces'
+import commonSchema from 'lib/server/data/schemas/common-schema'
+import formParser from 'lib/server/form-parser'
+import crypto from 'lib/server/node/crypto'
+import RedisContext from 'lib/server/redis-util/redis-context'
+import { getSession } from 'lib/server/session'
 
 async function generateUnusedSpaceName() {
     let space
@@ -50,19 +51,10 @@ export async function getServerSideProps({ req, res }) {
             return { redirect: { destination: '?confirm-session' } }
         }
 
-        let { type, space } = await formParser(req, res)
-
-        if (spaceNameInvalid(space)) {
-            return {
-                props: { error: {
-                    type: 'room:creation',
-                    message: `illegal characters in space name: ${JSON.stringify(space)}`,
-                } },
-            }
-        }
+        let { type } = await formParser(req, res)
 
         // make sure we have a space name, generate an unused one
-        space = space || await generateUnusedSpaceName()
+        const space = await generateUnusedSpaceName()
 
         try {
             await RedisContext.isolated(async () => {

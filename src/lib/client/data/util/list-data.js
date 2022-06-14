@@ -1,7 +1,11 @@
-import SpaceContext from 'components/space/SpaceContext'
-import { formData, sendFormData } from 'lib/client/form-util'
 import { useContext } from 'react'
 import { useSWRConfig } from 'swr'
+
+import SpaceContext from 'components/space/SpaceContext'
+import {
+    formData, sendFormData,
+} from 'lib/client/form-util'
+
 import { useKeyMappingFactory } from './key-mapping-context'
 
 export function useDeleteListItemAction(name, { id, afterMutate = Function.prototype }) {

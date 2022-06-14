@@ -1,4 +1,6 @@
-import { createContext, useContext } from 'react'
+import {
+    createContext, useContext,
+} from 'react'
 
 const KeyMappingContext = createContext({
     keys: {},

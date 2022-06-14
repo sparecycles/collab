@@ -1,12 +1,13 @@
-import React, { Fragment } from 'react'
-import Head from 'next/head'
-import spaces from 'lib/common/spaces'
 import Cookies from 'cookies'
-import SpaceContext from 'components/space/SpaceContext'
-import { getSession } from 'lib/server/session'
-import PropTypes from 'lib/common/react-util/prop-types'
-import commonSchema from 'lib/server/data/schemas/common-schema'
+import Head from 'next/head'
+import React, { Fragment } from 'react'
+
 import GeneralControls from 'components/space/GeneralControls'
+import SpaceContext from 'components/space/SpaceContext'
+import PropTypes from 'lib/common/react-util/prop-types'
+import spaces from 'lib/common/spaces'
+import commonSchema from 'lib/server/data/schemas/common-schema'
+import { getSession } from 'lib/server/session'
 
 /** @type {import('next').GetServerSideProps} */
 export async function getServerSideProps({ req, res, params: { space } }) {

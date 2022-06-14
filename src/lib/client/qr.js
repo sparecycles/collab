@@ -1,5 +1,7 @@
 import { toDataURL } from 'qrcode'
-import { useEffect, useState } from 'react'
+import {
+    useEffect, useState,
+} from 'react'
 
 export function useQrImage({ data, errorCorrectionLevel, lightColor, darkColor, margin, scale, width }) {
     const [qrResult, setQrResult] = useState({ pending: true, data: null, error: null })

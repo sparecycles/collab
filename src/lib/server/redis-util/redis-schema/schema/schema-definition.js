@@ -1,6 +1,7 @@
 import spec from '../spec'
 import { merge } from '../spec/spec-core/ops-spec'
 import { Scheme } from '../spec/spec-core/scheme-ops'
+
 import { defineNode } from './schema-node'
 
 export function schema(fn) {

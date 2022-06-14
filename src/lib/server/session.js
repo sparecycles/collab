@@ -6,11 +6,19 @@ const httpOnly = true
 export function getSession(cookies, generate = true) {
     let session = cookies.get('session') || null
     if (session || !generate) {
-        return { session, cookies, generated: false }
+        return {
+            session,
+            cookies,
+            generated: false,
+        }
     }
 
     session = crypto.randomUUID()
     cookies.set('session', session, { httpOnly })
 
-    return { session, cookies, generated: true }
+    return {
+        session,
+        cookies,
+        generated: true,
+    }
 }

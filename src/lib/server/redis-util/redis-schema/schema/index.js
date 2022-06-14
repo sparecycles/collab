@@ -1,1 +1,4 @@
-export { schema, mergeSchemas } from './schema-definition'
+export {
+    schema,
+    mergeSchemas,
+} from './schema-definition'

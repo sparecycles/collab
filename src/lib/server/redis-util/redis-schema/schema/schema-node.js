@@ -1,4 +1,6 @@
-import { expandSpec, hasOps, isContainerType } from '../spec/spec-core'
+import {
+    expandSpec, hasOps, isContainerType,
+} from '../spec/spec-core'
 
 function containedItemProxyFactory(Node, containedType, itemNodeFactory) {
     return function containedItem(key, ...itemArgs) {

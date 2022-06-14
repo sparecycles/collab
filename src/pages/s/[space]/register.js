@@ -1,14 +1,18 @@
-import Head from 'next/head'
-import { Flex, Form, TextField, Text } from '@adobe/react-spectrum'
-
 import Cookies from 'cookies'
-import formParser from 'lib/server/form-parser'
-import spaces from 'lib/common/spaces'
-import { getSession } from 'lib/server/session'
-import crypto from 'lib/server/node/crypto'
+import Head from 'next/head'
+
+import {
+    Flex, Form, Text, TextField,
+} from '@adobe/react-spectrum'
+
 import PropTypes from 'lib/common/react-util/prop-types'
+import spaces from 'lib/common/spaces'
 import commonSchema from 'lib/server/data/schemas/common-schema'
+import formParser from 'lib/server/form-parser'
+import crypto from 'lib/server/node/crypto'
 import RedisContext from 'lib/server/redis-util/redis-context'
+import { getSession } from 'lib/server/session'
+
 
 const httpOnly = true
 

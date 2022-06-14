@@ -1,4 +1,9 @@
 import {
+    useContext, useEffect, useRef, useState,
+} from 'react'
+import useSWR from 'swr'
+
+import {
     ActionButton,
     Button,
     ButtonGroup,
@@ -11,20 +16,22 @@ import {
     Image,
     ProgressCircle,
     Text,
-    useDialogContainer,
-    useProvider,
     View,
     Well,
+    useDialogContainer,
+    useProvider,
 } from '@adobe/react-spectrum'
-import { MenuTrigger, Menu, Item } from '@react-spectrum/menu'
+import {
+    Item, Menu, MenuTrigger,
+} from '@react-spectrum/menu'
 import Delete from '@spectrum-icons/workflow/Delete'
 import Devices from '@spectrum-icons/workflow/Devices'
 import PeopleGroup from '@spectrum-icons/workflow/PeopleGroup'
 import ShowMenu from '@spectrum-icons/workflow/ShowMenu'
+
 import { useQrImage } from 'lib/client/qr'
 import PropTypes from 'lib/common/react-util/prop-types'
-import { useContext, useEffect, useRef, useState } from 'react'
-import useSWR from 'swr'
+
 import SpaceContext from './SpaceContext'
 
 GeneralControls.propTypes = {

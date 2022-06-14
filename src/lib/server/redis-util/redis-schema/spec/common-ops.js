@@ -1,5 +1,8 @@
 import RedisContext, { contextRedisClient } from 'lib/server/redis-util/redis-context'
-import { createOps, isContainerInstance } from './spec-core'
+
+import {
+    createOps, isContainerInstance,
+} from './spec-core'
 
 export const CommonOps = createOps('CommonOps', {}, {
     $exists() {

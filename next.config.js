@@ -3,7 +3,6 @@ const glob = require('glob')
 const path = require('path')
 const nextComposePlugins = require('next-compose-plugins')
 const nextTranspileModules = require('next-transpile-modules')
-const { version } = require('os')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

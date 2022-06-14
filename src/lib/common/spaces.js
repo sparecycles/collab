@@ -1,8 +1,9 @@
-import Question from '@spectrum-icons/workflow/Question'
 import React from 'react'
 
-import * as voter from 'components/spaces/voter'
+import Question from '@spectrum-icons/workflow/Question'
+
 import * as planner from 'components/spaces/planner'
+import * as voter from 'components/spaces/voter'
 
 export default mapImports({
     voter,

@@ -1,7 +1,7 @@
 import {
-    defaultTheme,
     Provider as SpectrumProvider,
     SSRProvider as SpectrumAriaSSRProvider,
+    defaultTheme,
 } from '@adobe/react-spectrum'
 
 import 'styles/globals.css'

@@ -1,5 +1,7 @@
 
-import { schema, mergeSchemas } from './schema'
+import {
+    mergeSchemas, schema,
+} from './schema'
 
 export default schema
 

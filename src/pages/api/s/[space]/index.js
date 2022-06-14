@@ -1,7 +1,8 @@
 import Cookies from 'cookies'
+
 import methods from 'lib/server/api/methods'
-import { getSession } from 'lib/server/session'
 import commonSchema from 'lib/server/data/schemas/common-schema'
+import { getSession } from 'lib/server/session'
 
 import { default as pathApi } from './[...path]'
 

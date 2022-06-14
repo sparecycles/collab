@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+
 import redisClient from '../redis-client'
 
 /** @type {AsyncLocalStorage<{ current: typeof redisClient, isolated: typeof redisClient, multi: ReturnType<typeof redisClient.multi> >} */

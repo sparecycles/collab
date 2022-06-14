@@ -5,7 +5,13 @@ import { isContainerInstance } from './create-ops'
  * can be used to manage data relationships.
  * @param {{ key: string, parent: Scheme | any }} options options for this scheme node
  */
-export function Scheme({ key, parent, containedType, itemArgs, ...options }) {
+export function Scheme({
+    key,
+    parent,
+    containedType,
+    itemArgs,
+    ...options
+}) {
     this._type = this.constructor.name
     this._key = key
     this._parent = parent instanceof Scheme ? parent : null

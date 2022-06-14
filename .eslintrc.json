@@ -20,7 +20,9 @@
     "indent": [ "error", 4, {
       "flatTernaryExpressions": true
     } ],
-    "arrow-parens": [ "error", "as-needed", { "requireForBlockBody": true } ],
+    "arrow-parens": [ "error", "as-needed", {
+      "requireForBlockBody": true
+    } ],
     "comma-dangle": [ "error", {
       "arrays": "always-multiline",
       "objects": "always-multiline",
@@ -51,23 +53,25 @@
       "destructuredArrayIgnorePattern": "^_",
       "caughtErrorsIgnorePattern": "^ignore"
     } ],
-    "ordered-imports/ordered-imports": [
-      "error",
-      {
-        "symbols-first": true,
-        "declaration-ordering": ["type", {
-          "ordering": ["side-effect", "default", "namespace", "destructured"],
-          "secondaryOrdering": ["name", "lowercase-last"]
-        }],
-        "specifier-ordering": "lowercase-last",
-        "group-ordering": [
-          { "name": "third-party", "match": ".*", "order": 10 },
-          { "name": "scoped-imports", "match": "^@", "order": 20 },
-          { "name": "parent directories", "match": "^\\.\\.", "order": 30 },
-          { "name": "current directory", "match": "^\\.", "order": 40 }
-        ]
-      }
-    ]
+    "object-property-newline": ["error", {
+      "allowAllPropertiesOnSameLine": true
+    } ],
+    "object-curly-newline": ["error", {
+      "ImportDeclaration": { "multiline": true, "minProperties": 2 },
+      "ExportDeclaration": { "multiline": true, "minProperties": 2 }
+    } ],
+    "ordered-imports/ordered-imports": [ "error", {
+      "symbols-first": true,
+      "declaration-ordering": ["source", "lowercase-last"],
+      "specifier-ordering": "lowercase-last",
+      "group-ordering": [
+        { "name": "scoped imports", "match": "^@", "order": 20 },
+        { "name": "local project", "match": "^(?:lib|components|styles)/", "order": 30 },
+        { "name": "parent directories", "match": "^[.][.]", "order": 40 },
+        { "name": "current directory", "match": "^[.]", "order": 50 },
+        { "name": "third-party", "match": ".*", "order": 10 }
+      ]
+    } ]
   },
   "globals": {
     "SubmitEvent": false,

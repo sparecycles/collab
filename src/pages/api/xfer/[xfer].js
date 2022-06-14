@@ -1,5 +1,5 @@
-import xferScheme from 'lib/server/data/schemas/xfer-schema'
 import methods, { _404 } from 'lib/server/api/methods'
+import xferScheme from 'lib/server/data/schemas/xfer-schema'
 
 /** @type {import('next').NextApiHandler} */
 export default methods({

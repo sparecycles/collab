@@ -1,8 +1,9 @@
 import Cookies from 'cookies'
+
 import spaces from 'lib/common/spaces'
-import { getSession } from 'lib/server/session'
-import commonSchema from 'lib/server/data/schemas/common-schema'
 import { handleWithApiMap } from 'lib/server/api/api-map'
+import commonSchema from 'lib/server/data/schemas/common-schema'
+import { getSession } from 'lib/server/session'
 
 /** @type {import('next').NextApiHandler} */
 export default async function api(req, res) {

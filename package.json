@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "npm run lint --fix",
     "analyze": "cross-env ANALYZE=true next build",
-    "prepare": "husky install",
-    "lint:fix": "npm run lint --fix"
+    "prepare": "husky install"
   },
   "dependencies": {
     "@adobe/react-spectrum": "^3.18.0",
