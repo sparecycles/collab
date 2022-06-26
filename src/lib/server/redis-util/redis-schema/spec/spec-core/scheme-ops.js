@@ -29,21 +29,25 @@ Object.assign(Scheme.prototype, {
     $del() {
         return Promise.all([
             this.$$removeFromContainer(),
-            this.$$removeNested(),
+            ...this.$$removeNested(),
         ])
     },
+    // deletes just this value without cleaning up contained or references in parent.
+    $$delThis: Function.prototype,
+    // removes this item from
     $$removeNested() {
-        return Promise.all([
+        return [
             this.$$delContained?.(),
-            this.$$delThis_UNSAFE?.(),
+            this.$$delThis?.(),
             ...Object.keys(this.$$nested || {}).map(key => this[key].$$removeNested()),
-        ])
+        ]
     },
+    // removes this item from any parent container.
     $$removeFromContainer() {
         const { _parent: parent, _key: key } = this
 
         if (isContainerInstance(parent)) {
-            parent.$rem(key, ...this._itemArgs)
+            return parent.$rem(key, ...this._itemArgs)
         }
     },
     __assemblePath(pieces) {

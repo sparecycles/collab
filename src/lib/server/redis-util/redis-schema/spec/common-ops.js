@@ -1,25 +1,19 @@
 import RedisContext, { contextRedisClient } from 'lib/server/redis-util/redis-context'
 
 import {
-    createOps, isContainerInstance,
+    Scheme,
+    createOps,
+    isContainerInstance,
 } from './spec-core'
 
-export const CommonOps = createOps('CommonOps', {}, {
+export const CommonOps = createOps('CommonOps', { extends: Scheme }, {
     $exists() {
         return contextRedisClient('r').exists(this.$path())
     },
     $watch() {
         return contextRedisClient('i').watch(this.$path())
     },
-    $del() {
-        return Promise.all([
-            this.$$removeFromContainer(),
-            this.$$removeNested(),
-            this.$$delContained?.(),
-            this.$$delThis_UNSAFE(),
-        ])
-    },
-    $$delThis_UNSAFE() {
+    $$delThis() {
         return contextRedisClient('w').del(this.$path())
     },
     $expire(time) {

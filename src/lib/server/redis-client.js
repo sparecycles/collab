@@ -6,6 +6,12 @@ const options = {
 
 const redisClient = createClient(options)
 
+redisClient.on('error', (err) => {
+    console.warn('redis client error', err)
+}).on('reconnecting', () => {
+    console.info('redis client reconnecting')
+})
+
 redisClient.connect()
 
 export default redisClient
