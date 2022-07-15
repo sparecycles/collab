@@ -63,7 +63,7 @@ const voterSchema = mergeSchemas?.(commonSchema, schema?.(({ hash, set, range })
 
 const roleContext = role => ({ context: { roles } }) => roles.has(role)
 
-function requireRoleContext(...checks) {
+function requireContext(...checks) {
     const stringChecks = checks.filter(check => typeof check === 'string')
     const otherChecks = checks.filter(check => typeof check !== 'string')
 
@@ -104,7 +104,7 @@ export const api = {
         },
         adminRole: roleContext('admin'),
     },
-    $mixin: { $delete: requireRoleContext('adminRole') },
+    $mixin: { $delete: requireContext('adminRole') },
     async $delete({ query: { space } }, res) {
         try {
             await voterSchema.collab.spaces(space).$del()
@@ -115,7 +115,7 @@ export const api = {
         return res.status(204).end()
     },
     users: {
-        $inherited: requireRoleContext('adminRole'),
+        $inherited: requireContext('adminRole'),
         $get({ context: { allUsersWithRoles } }, res) {
             return res.json(allUsersWithRoles)
         },
@@ -149,7 +149,7 @@ export const api = {
         '[story]': {
             vote: {
                 reveal: {
-                    $inherited: requireRoleContext('adminRole'),
+                    $inherited: requireContext('adminRole'),
                     async $put({ query: { space, story } }, res) {
                         await voterSchema.collab.spaces(space).stories(story).$set({ revealed: true })
 
