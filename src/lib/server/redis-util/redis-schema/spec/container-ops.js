@@ -10,4 +10,7 @@ export const ContainerOps = createOps('ContainerOps', { isContainer: true, exten
     async $$delContained() {
         return await Promise.all([...await this.$get()].map(key => this.$self(key)?.$del()))
     },
+    $$addWatched(key) {
+        return this.$add(key)
+    },
 })

@@ -25,7 +25,7 @@ export const CommonOps = createOps('CommonOps', { extends: Scheme }, {
         if (isContainerInstance(parent)) {
             await RedisContext
                 .isolated(() => parent.$watch())
-                .multi(() => parent.$add(key, ...this._itemArgs))
+                .multi(() => parent.$$addWatched(key, ...this._itemArgs))
                 .exec()
         }
 

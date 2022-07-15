@@ -8,13 +8,20 @@ export const RangeOps = createOps('RangeOps', { extends: ContainerOps }, {
     $get(start = 0, stop = -1) {
         return contextRedisClient('r').lRange(this.$path(), start, stop)
     },
+    $$addWatched(key) {
+        return RedisContext.isolated(async () => {
+            return await this.$pos(key) === null
+        }).multi(
+            doesNotExist => doesNotExist && contextRedisClient('w').rPush(this.$path(), key)
+        ).exec()
+    },
     $add(key) {
-        return RedisContext.multi(async () => {
+        return RedisContext.isolated(async () => {
             await this.$watch()
-            if (await this.$pos(key) === null) {
-                return contextRedisClient('w').rPush(this.$path(), key)
-            }
-        }).exec()
+            return await this.$pos(key) === null
+        }).multi(
+            doesNotExist => doesNotExist && contextRedisClient('w').rPush(this.$path(), key)
+        ).exec()
     },
     $pos(key, options = {}) {
         return contextRedisClient('r').lPos(this.$path(), key, options)

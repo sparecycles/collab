@@ -332,6 +332,7 @@ StoryItem.propTypes = {
 function StoryItem({ story, title }) {
     const { space, roles } = useContext(SpaceContext)
 
+    const fallbackData = { vote: null, voteSnapshot: [], count: 0, total: 0 }
     const { data: {
         vote,
         voteSnapshot,
@@ -339,9 +340,16 @@ function StoryItem({ story, title }) {
         count: votedCount,
         total: totalVoters,
     }, mutate } = useSWR(`stories:${story}:vote`, async () => {
+        if (story.startsWith('local-')) {
+            return fallbackData
+        }
+
         const response = await fetch(`/api/s/${space}/stories/${story}/vote`)
         return await response.json()
-    }, { refreshInterval: 1000, fallbackData: { vote: null, voteSnapshot: [], count: 0, total: 0 } })
+    }, {
+        refreshInterval: 1000,
+        fallbackData,
+    })
 
     const hideMyVotes = useContext(HideMyVoteContext)
 
