@@ -138,8 +138,8 @@ export const api = {
                     },
                 },
             },
-            $delete({ query: { space, user } }, res) {
-                voterSchema.collab.spaces(space).users(user).$del()
+            async $delete({ query: { space, user } }, res) {
+                await voterSchema.collab.spaces(space).users(user).$del()
                 return res.status(204).end()
             },
         },
@@ -185,27 +185,30 @@ export const api = {
                     res.status(204).end()
                 },
                 async $get({ context: { user }, query: { space, story } }, res) {
+                    const userIdsPromise = voterSchema.collab.spaces(space).users.$get()
                     const storyInfoPromise = voterSchema.collab.spaces(space).stories(story).$get()
-                    const vote = await voterSchema.collab.spaces(space).users(user).votes.$get(story)
+                    const votePromise = voterSchema.collab.spaces(space).users(user).votes.$get(story)
 
-                    const { revealed, voteSnapshot } = await storyInfoPromise
-                    const allUserIds = [...await voterSchema.collab.spaces(space).users.$get()]
+                    const allUserIds = [...await userIdsPromise]
                     const votingUsers = (await Promise.all(
                         allUserIds.map(
-                            async user => await voterSchema.collab.spaces(space).users(user).roles.$has('voter')
-                            && user
+                            async user =>
+                                await voterSchema.collab.spaces(space).users(user).roles.$has('voter') && user
                         )
                     )).filter(Boolean)
 
-                    const count = (await Promise.all(votingUsers.map(other =>
-                        voterSchema.collab.spaces(space).users(other).votes.$get(story)
+                    const votedCount = (await Promise.all(votingUsers.map(user =>
+                        voterSchema.collab.spaces(space).users(user).votes.$get(story)
                     ))).filter(Boolean).length
+
                     const total = votingUsers.length
 
+                    const { revealed, voteSnapshot } = await storyInfoPromise
+
                     res.status(200).json({
-                        vote,
+                        vote: await votePromise,
                         voteSnapshot: voteSnapshot?.split(',') || [],
-                        count,
+                        count: votedCount,
                         total,
                         revealed: Boolean(revealed),
                     })
