@@ -41,7 +41,9 @@ function createNodeFactory(spec, { applyNestedMapping }) {
     }
 
     if (!isContainerType(Type)) {
-        return function(key, ...itemArgs) { return new Node({ key, parent: this, itemArgs }) }
+        return function(key, ...itemArgs) {
+            return new Node({ key, parent: this, itemArgs })
+        }
     }
 
     const { Type: containedType } = expandSpec(nested)

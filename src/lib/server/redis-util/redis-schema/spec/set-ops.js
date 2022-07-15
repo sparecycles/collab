@@ -8,7 +8,7 @@ export const SetOps = createOps('SetOps', { extends: ContainerOps }, {
         return contextRedisClient('r').sIsMember(this.$path(), key)
     },
     async $add(key) {
-        this.$$addToContainer()
+        await this.$$addToContainer()
         contextRedisClient('w').sAdd(this.$path(), key)
     },
     async $get() {

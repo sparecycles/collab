@@ -76,7 +76,7 @@ function requireRoleContext(...checks) {
         ))).every(Boolean)
 
         if (!satisified) {
-            res.status(404).end(`not authorized`)
+            res.status(403).end(`not authorized`)
         }
     }
 }

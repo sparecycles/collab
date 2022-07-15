@@ -19,16 +19,16 @@ export const CommonOps = createOps('CommonOps', { extends: Scheme }, {
     $expire(time) {
         return contextRedisClient('w').expire(this.$path(), time)
     },
-    $$addToContainer() {
+    async $$addToContainer() {
         const { _parent: parent, _key: key } = this
 
         if (isContainerInstance(parent)) {
-            RedisContext.multi(() => {
-                parent.$watch()
-                parent.$add(key, ...this._itemArgs)
-            }).exec()
+            await RedisContext
+                .isolated(() => parent.$watch())
+                .multi(() => parent.$add(key, ...this._itemArgs))
+                .exec()
         }
 
-        parent?.$$addToContainer?.()
+        return parent?.$$addToContainer?.()
     },
 })

@@ -16,9 +16,9 @@ export default function hashList(hashListFor, param, { [param]: paramMixin, ...m
         },
         async $post({ body, query }, res) {
             /** @type {{[_:string]: string}} */
-            const { id = crypto.randomUUID(), title } = body
+            const { id = crypto.randomUUID(), ...data } = body
 
-            await hashListFor(query)(id).$set({ title })
+            await hashListFor(query)(id).$set({ ...data })
 
             return res.json({ id })
         },

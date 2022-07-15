@@ -7,7 +7,7 @@ import { getSession } from 'lib/server/session'
 
 /** @type {import('next').NextApiHandler} */
 export default async function api(req, res) {
-    let { space, path: queryPath = [] } = req.query
+    let { space, path = [] } = req.query
 
     const { session } = getSession(new Cookies(req, res), false)
 
@@ -18,11 +18,11 @@ export default async function api(req, res) {
     }
 
     try {
-        if (!await handleWithApiMap(req, res, spaces[type].api, queryPath, { session })) {
+        if (!await handleWithApiMap(req, res, spaces[type].api, path, { session })) {
             return res.status(404).end()
         }
     } catch (error) {
-        console.error(`error calling space[${type}].api ${queryPath}`, error)
+        console.error(`error calling space[${type}].api ${path}`, error)
         return res.status(500).end()
     }
 }
